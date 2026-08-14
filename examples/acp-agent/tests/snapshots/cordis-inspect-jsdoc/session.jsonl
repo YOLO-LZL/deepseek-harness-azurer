@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"22222222-2222-4222-8222-222222222222","createdAt":1783951000000,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"22222222-2222-4222-8222-222222222222","createdAt":1783951000000,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498803392,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Inspect the exact tools service API and tools/pre-execute event with cordis_inspect_query, then reply with exactly CORDIS_INSPECT_JSDOC_OK."}],"source":{"kind":"user"},"role":"user","id":"3a6e7222-9340-429e-bec7-c30fcd063c70"}]}}
 {"type":"turn/start","seq":1,"time":1785821419616,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821419616,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

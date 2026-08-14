@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498788069,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"This prompt first receives an empty completion, then a retried reply."}],"source":{"kind":"user"},"role":"user","id":"04a4b0d6-8873-4ec0-bed5-75de910b556f"}]}}
 {"type":"turn/start","seq":1,"time":1785821397720,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821397720,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

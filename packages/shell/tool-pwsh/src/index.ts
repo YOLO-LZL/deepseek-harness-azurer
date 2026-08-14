@@ -35,6 +35,7 @@ import { ESCALATION_TARGETS, approveEscalation, validateEscalationArgs } from '@
 import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
 import type { ShellRunResult } from '@deepseek-ai/dsh-shell'
 import { parseExitStatus } from '@deepseek-ai/dsh-shell'
+import { sessionWorld } from '@deepseek-ai/dsh-execution-world/consumer'
 import { processOutcome } from './background.ts'
 import { renderPwshProcessRead, renderPwshResult } from './render.ts'
 import type { RenderablePwshResult } from './render.ts'
@@ -347,6 +348,16 @@ export function apply(ctx: Context, config: Config = {}): void {
     /* jscpd:ignore-start -- the execute path mirrors dsh-tool-bash's by design (see the pwsh-tool-and-executor Agent Note). */
     async execute(args: PwshToolArgs, exec) {
       validatePwshArgs(args)
+      // SSH (remote) execution worlds have no PowerShell: the remote host is a
+      // Linux bash world. Fail loud instead of running pwsh on the wrong side.
+      const remoteWorld = sessionWorld(ctx, exec.agent?.session.header)
+      if (remoteWorld !== undefined
+        && remoteWorld.subprocess !== undefined
+        && remoteWorld.location.providerId !== 'local') {
+        throw new Error(
+          'pwsh is not available in remote (SSH) workspaces — use `bash` (the remote world executes Linux bash)',
+        )
+      }
       // Description is display metadata; workdir defaults to the caller's session.
       const standingPolicy = resolveSandboxPolicy(exec)
       const approvedMode = args.sandbox_permissions !== undefined && args.justification !== undefined

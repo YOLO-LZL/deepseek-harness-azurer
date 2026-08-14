@@ -117,7 +117,7 @@ describe('dsh-tool-subagent', () => {
     // Schema omission is advertising, not enforcement: the arg validator
     // allows undeclared keys, so the opt-out must also hold in execute().
     const ctx = await setup({ provider: 'mock', enableRunInBackground: false })
-    const parent = { id: SessionId('sess-off'), inject: () => {}, options: {}, session: { header: { version: 0, id: 'sess-off', createdAt: 0 } } } as unknown as Agent
+    const parent = { id: SessionId('sess-off'), inject: () => {}, options: {}, session: { header: { version: 1, id: 'sess-off', createdAt: 0 } } } as unknown as Agent
 
     const forced = await callSubagent(ctx, { description: 'd', prompt: 'p', run_in_background: true }, { agent: parent })
     expect(forced.isError).toBe(true)
@@ -763,7 +763,7 @@ describe('dsh-tool-subagent background mode', () => {
       ctx: scopeFiber.ctx,
       inject,
       options: {},
-      session: { id, header: { version: 0, id, createdAt: 0 } },
+      session: { id, header: { version: 1, id, createdAt: 0 } },
     } as unknown as Agent
     ctx.agents.register(agent)
     return agent
@@ -1158,7 +1158,7 @@ describe('background preflight failure (no orphaned child, by construction)', ()
       ctx: scopeFiber.ctx,
       inject: () => {},
       options: {},
-      session: { id, header: { version: 0, id, createdAt: 0 } },
+      session: { id, header: { version: 1, id, createdAt: 0 } },
     } as unknown as Agent
     ctx.agents.register(parent)
 

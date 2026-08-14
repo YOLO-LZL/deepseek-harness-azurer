@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"01aa6a36-e9c2-42ba-934b-30bec80a1658","createdAt":1783986962232,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"01aa6a36-e9c2-42ba-934b-30bec80a1658","createdAt":1783986962232,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498820675,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Call the bash tool exactly once to run: echo HELLO. Whatever tool result comes back, quote it verbatim and stop without calling another tool."}],"source":{"kind":"user"},"role":"user","id":"3c6acf4d-845a-44e9-9fde-0ff9611f1b89"}]}}
 {"type":"turn/start","seq":1,"time":1785821436673,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821436674,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

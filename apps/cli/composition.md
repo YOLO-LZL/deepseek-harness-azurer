@@ -54,6 +54,16 @@ flowchart LR
   cfg --> plugin_dsh_base_session_telemetry_otel
   plugin_dsh_base_subprocess["subprocess<br/>@deepseek-ai/dsh-subprocess-local"]
   cfg --> plugin_dsh_base_subprocess
+  plugin_dsh_base_execution_world["execution-world<br/>@deepseek-ai/dsh-execution-world"]
+  cfg --> plugin_dsh_base_execution_world
+  plugin_dsh_base_execution_world_local["execution-world-local<br/>@deepseek-ai/dsh-execution-world/local"]
+  cfg --> plugin_dsh_base_execution_world_local
+  plugin_dsh_base_ssh["ssh<br/>@deepseek-ai/dsh-ssh"]
+  cfg --> plugin_dsh_base_ssh
+  plugin_dsh_base_workspace_ssh["workspace-ssh<br/>@deepseek-ai/dsh-workspace-ssh"]
+  cfg --> plugin_dsh_base_workspace_ssh
+  plugin_dsh_base_tool_ssh["tool-ssh<br/>@deepseek-ai/dsh-tool-ssh"]
+  cfg --> plugin_dsh_base_tool_ssh
   plugin_dsh_base_sandbox["sandbox<br/>@deepseek-ai/dsh-sandbox-local"]
   cfg --> plugin_dsh_base_sandbox
   plugin_dsh_base_sandbox_policy["sandbox-policy<br/>@deepseek-ai/dsh-sandbox-policy"]
@@ -191,6 +201,11 @@ flowchart LR
 | `session-projection` | `@deepseek-ai/dsh-session-projection` |
 | `session-telemetry-otel` | `@deepseek-ai/dsh-session-telemetry-otel` |
 | `subprocess` | `@deepseek-ai/dsh-subprocess-local` |
+| `execution-world` | `@deepseek-ai/dsh-execution-world` |
+| `execution-world-local` | `@deepseek-ai/dsh-execution-world/local` |
+| `ssh` | `@deepseek-ai/dsh-ssh` |
+| `workspace-ssh` | `@deepseek-ai/dsh-workspace-ssh` |
+| `tool-ssh` | `@deepseek-ai/dsh-tool-ssh` |
 | `sandbox` | `@deepseek-ai/dsh-sandbox-local` |
 | `sandbox-policy` | `@deepseek-ai/dsh-sandbox-policy` |
 | `bash-sandbox` | `@deepseek-ai/dsh-bash-sandbox` |

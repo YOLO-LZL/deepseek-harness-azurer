@@ -24,18 +24,27 @@ Consumers see only the `Workspace` interface; the implementation stays package-p
 
 ```ts type-equiv
 /**
- * One workspace: a stable id over an existing directory, a display title, and
- * an ordered candidate account of sessions. Membership requires both an id in
- * that account and a session header whose canonical cwd equals the workspace
- * path. Consumers only see this interface; the implementation stays private.
+ * One workspace: a stable id over an existing directory in one execution
+ * world, a display title, and an ordered candidate account of sessions.
+ * Membership requires both an id in that account and a session header whose
+ * canonical execution location equals the workspace location. Consumers only
+ * see this interface; the implementation stays private.
  */
 interface Workspace {
   /** Stable record id (generated uuid). */
   readonly id: WorkspaceId
 
   /**
-   * Canonical directory path: the `fs.realpath` of the path given at create
-   * time (trailing slashes, `..`, and symlinks all resolved). Never rewritten
+   * The execution world this workspace lives in. The local world
+   * (`{ providerId: 'local', target: null, root }`) is the default for
+   * records created before locations existed.
+   */
+  readonly location: ExecutionLocation
+
+  /**
+   * Canonical directory path in the workspace's execution world: the
+   * provider's canonicalization of the path given at create time (trailing
+   * slashes, `..`, and symlinks all resolved in-world). Never rewritten
    * afterwards, even when the directory disappears (see {@link status}).
    */
   readonly path: string
@@ -53,9 +62,9 @@ interface Workspace {
    * Header-validated sessions in manually owned order: a new session is
    * prepended at attach, explicit reordering goes through
    * `insertSessionBefore`, and activity never reorders. The durable candidate
-   * account is filtered synchronously: missing headers, invalid cwd values,
-   * and canonical cwd mismatches are never returned. A subsequent workspace
-   * mutation prunes those filtered candidates durably.
+   * account is filtered synchronously: missing headers, invalid locations,
+   * and canonical location mismatches are never returned. A subsequent
+   * workspace mutation prunes those filtered candidates durably.
    */
   readonly sessionIds: readonly SessionId[]
 
@@ -70,10 +79,9 @@ interface Workspace {
    * Prepend a session to this workspace's candidate account. An already
    * accounted id resolves without writing, aside from the durable
    * filtered-candidate prune every accepted mutation performs. A new id's
-   * live or persisted
-   * header cwd must resolve to an existing directory equal to {@link path};
-   * unknown ids, missing or invalid cwd values, and mismatches reject without
-   * writing.
+   * live or persisted header location must resolve to an existing directory
+   * equal to {@link location}; unknown ids, missing or invalid locations,
+   * and mismatches reject without writing.
    * @param sessionId - The session to record.
    * @returns resolution after durability.
    */
@@ -104,9 +112,9 @@ interface Workspace {
   detachSession(sessionId: SessionId): Promise<void>
 
   /**
-   * Live directory check, uncached: whether {@link path} currently exists and
-   * is a directory. A missing directory never mutates the record — the
-   * directory may only be temporarily moved.
+   * Live directory check, uncached: whether the workspace's root directory
+   * currently exists in its execution world. A missing directory never
+   * mutates the record — the directory may only be temporarily moved.
    * @returns `'ok'` when the directory exists, `'missing-dir'` otherwise.
    */
   status(): Promise<'ok' | 'missing-dir'>
@@ -149,25 +157,196 @@ abstract capability(): DirectoryPickerCapability
 
 Source: [`packages/host/directory-picker/src/index.ts:131`](../../packages/host/directory-picker/src/index.ts)
 
+<a id="ctxexecutionworlds--executionworldregistry"></a>
+
+### `ctx.executionWorlds` — `ExecutionWorldRegistry`
+
+The execution-world registry: one registered provider per stable id, effect-scoped registration, duplicate-id rejection, and location routing.
+
+```ts cordis-catalog
+/**
+ * Register one execution-world provider. Registration is effect-scoped: the
+ * returned disposer (and the enclosing cordis effect scope) removes the
+ * provider and every route to it.
+ * @param provider - the provider to register; its id must be unique.
+ * @returns the disposer unregistering this provider (idempotent).
+ * @throws a plain `Error` when the id is empty or already registered.
+ */
+register(provider: ExecutionWorldProvider): () => void
+
+/**
+ * Look up one registered provider.
+ * @param id - provider id.
+ * @returns the provider, or `undefined` when unknown.
+ */
+provider(id: string): ExecutionWorldProvider | undefined
+
+/**
+ * The registered providers in registration order — the capability status
+ * surface for Host APIs and the UI.
+ * @returns a fresh array of providers.
+ */
+listProviders(): ExecutionWorldProvider[]
+
+/**
+ * Resolve a location to its live backends. The location must name a
+ * registered provider; the provider interprets its own target and path
+ * syntax.
+ * @param location - the location to resolve; `undefined` routes to the
+ *   built-in `local` provider's default location.
+ * @returns the resolved world with its backends.
+ * @throws {@link ExecutionError} with `execution-provider-not-found` when
+ *   the provider is unknown or the local default is not registered.
+ */
+resolve(location?: ExecutionLocation): ResolvedExecutionWorld
+
+/**
+ * Resolve the workspace-provider operations for one location.
+ * @param location - the location to resolve; `undefined` routes to local.
+ * @returns the workspace operations.
+ * @throws {@link ExecutionError} with `execution-provider-not-found` when
+ *   the provider is unknown, and `execution-unavailable` when the provider
+ *   registers no workspace capability.
+ */
+workspace(location?: ExecutionLocation): WorkspaceProviderOperations
+
+/**
+ * Resolve the workspace-provider operations of one named provider, without
+ * a location — the create-input path, where the location does not exist yet.
+ * @param providerId - provider id.
+ * @returns the workspace operations.
+ * @throws {@link ExecutionError} with `execution-provider-not-found` when
+ *   the provider is unknown, and `execution-unavailable` when the provider
+ *   registers no workspace capability.
+ */
+workspaceOf(providerId: string): WorkspaceProviderOperations
+```
+
+Source: [`packages/execution/execution-world/src/index.ts:68`](../../packages/execution/execution-world/src/index.ts)
+
+<a id="ctxssh--sshruntime"></a>
+
+### `ctx.ssh` — `SshRuntime`
+
+The SSH runtime: connection registry over the `ssh-connections` settings namespace (with legacy migration), read-only ~/.ssh/config aliases, and per-connection transport instances.
+
+```ts cordis-catalog
+/**
+ * The mounted settings scope, when a settings service exists.
+ * @returns the writable scope, or `undefined` without settings.
+ */
+connectionsScope(): SettingsScope<SshConnectionsSettings> | undefined
+
+/**
+ * The resolved connections settings value (mounted scope or memory).
+ * @returns the current connection settings.
+ */
+connectionsSettings(): SshConnectionsSettings
+
+/**
+ * Probe for a usable system ssh client. Cached; never throws.
+ * @returns true when `ssh` is on PATH and starts.
+ */
+sshAvailable(): Promise<boolean>
+
+/**
+ * All saved connections in save order.
+ * @returns the current connection records.
+ */
+listConnections(): SshConnection[]
+
+/**
+ * Hosts discovered from ~/.ssh/config (read-only).
+ * @returns discovered aliases and their resolved facts.
+ */
+listConfigHosts(): Promise<SshConfigHost[]>
+
+/**
+ * Resolve a connection by id or label.
+ * @param idOrLabel - stable connection id or display label.
+ * @returns the matching connection, or `undefined`.
+ */
+connection(idOrLabel: string): SshConnection | undefined
+
+/**
+ * The workspace default connection id for one workspace, when bound.
+ * @param workspaceId - stable workspace id.
+ * @returns the bound connection id, or `undefined`.
+ */
+workspaceDefault(workspaceId: string): string | undefined
+
+/**
+ * Resolve a target reference into concrete transport facts.
+ * @param reference - saved connection or OpenSSH config alias reference.
+ * @returns host, port, key, and timeout values for a transport.
+ */
+resolveReference(reference: SshTargetReference): SshTransportTarget
+
+/**
+ * Resolve the SSH target reference carried by one execution location.
+ * @param location - SSH execution location to inspect.
+ * @param operation - caller name included in a provider mismatch error.
+ * @returns the validated saved-connection or config-alias reference.
+ */
+referenceOf(location: ExecutionLocation, operation: string = 'resolve'): SshTargetReference
+
+/**
+ * Display label of one location's reference, when resolvable.
+ * @param reference - saved connection or config alias reference.
+ * @returns a user-facing label, or `undefined` for a missing connection.
+ */
+labelOf(reference: SshTargetReference): string | undefined
+
+/**
+ * The transport for one execution location (per-reference instances are
+ * cached and closed at service disposal).
+ * @param location - an ssh execution location.
+ * @returns the live transport; lazily connected.
+ */
+transportFor(location: ExecutionLocation): SshTransport
+
+/**
+ * Close and forget one connection's transport after a connection mutation.
+ * @param reference - target whose cached transport must be released.
+ */
+invalidateTransport(reference: SshTargetReference): void
+
+/**
+ * Resolve the effective target for ssh_exec-style calls: explicit host →
+ * explicit connection → workspace default.
+ * @param args - model arguments.
+ * @param workspaceDefaultId - the calling workspace's default connection id.
+ * @returns the resolved target (host string form for ssh argv).
+ */
+resolveExecTarget( args: { host?: string; connection?: string }, workspaceDefaultId: string | undefined, ): Promise<SshTarget>
+```
+
+Types: [SettingsScope](settings.md)
+
+Source: [`packages/ssh/ssh/src/index.ts:142`](../../packages/ssh/ssh/src/index.ts)
+
 <a id="ctxworkspaceregistry--workspaceregistry"></a>
 
 ### `ctx.workspaceRegistry` — `WorkspaceRegistry`
 
-Durable workspace registry. Startup waits for `sessionPersistence`, builds one canonical-cwd header index, and completes the one-time history bootstrap before the service becomes active. The persistence dependency is mandatory so an unavailable peer can never be mistaken for an empty history and commit the initialized marker.
+Durable workspace registry. Startup waits for `sessionPersistence`, builds one canonical-location header index, and completes the one-time history bootstrap before the service becomes active. The persistence dependency is mandatory so an unavailable peer can never be mistaken for an empty history and commit the initialized marker.
+
+The registry delegates workspace-provider operations (canonicalize, validate/status, list, create, ensureSessionRoot, location resolution) to the execution-world registry when one is mounted; without it, local create/resolve fall back to this package's original realpath/stat path.
 
 ```ts cordis-catalog
 /**
- * Create or reuse a workspace for an existing directory. The path is
- * canonicalized through `fs.realpath`; a nonexistent path rejects with the
- * original error and a non-directory rejects. Repeated calls for the same
- * canonical path return the existing entity without changing its title.
- * A newly created workspace is prepended to the durable registry order.
- * Different canonical paths may share a display title.
- * @param path - Existing directory to own, in any path spelling.
+ * Create or reuse a workspace. The input names either a host directory
+ * (`kind: 'local'`) or a target in a registered execution world
+ * (`kind: 'provider'`); the owning workspace provider canonicalizes and
+ * validates the location. A nonexistent path rejects; repeated calls for
+ * the same canonical location return the existing entity without changing
+ * its title. A newly created workspace is prepended to the durable
+ * registry order. Different canonical locations may share a display title.
+ * @param input - Discriminated create request (local path or provider target).
  * @param title - Display title used only when a new record is created.
  * @returns the existing or newly durable workspace.
  */
-async create(path: string, title?: string): Promise<Workspace>
+async create(input: WorkspaceCreateInput, title?: string): Promise<Workspace>
 
 /**
  * Look up a workspace by id.
@@ -179,7 +358,8 @@ get(id: WorkspaceId): Workspace | undefined
 /**
  * Synchronous workspace projection in durable registry order. Every
  * entity's `sessionIds` getter is already filtered by the startup/live
- * canonical-cwd header index; this method performs no persistence reads.
+ * canonical-location header index; this method performs no persistence
+ * reads.
  * @returns a fresh ordered array of workspace entities.
  */
 list(): Workspace[]
@@ -214,15 +394,64 @@ archiveSession(sessionId: SessionId): Promise<void>
 
 /**
  * Resolve by canonical directory path without creating or mutating a
- * workspace. A missing path rejects during `realpath`; an existing unowned
- * directory returns `undefined`.
+ * workspace. Only local workspaces are addressable by host path: the path
+ * is canonicalized through the local provider (or this package's fallback)
+ * and matched against local records.
  * @param path - Existing directory path in any spelling.
  * @returns the workspace owning the canonical path, when one exists.
  */
 async resolveByPath(path: string): Promise<Workspace | undefined>
+
+/**
+ * Resolve by execution location without creating or mutating a workspace.
+ * Remote (SSH) workspaces are only addressable this way — their directories
+ * are not host paths. The location must match a record canonically.
+ * @param location - the execution location to match.
+ * @returns the workspace owning the location, when one exists.
+ */
+resolveByLocation(location: ExecutionLocation): Workspace | undefined
 ```
 
 Types: [SessionId](core.md)
 
-Source: [`packages/workspace/workspace/src/index.ts:92`](../../packages/workspace/workspace/src/index.ts)
+Source: [`packages/workspace/workspace/src/index.ts:130`](../../packages/workspace/workspace/src/index.ts)
+
+<a id="execution-worlds-events"></a>
+
+### `execution-worlds/*` events
+
+<a id="execution-worldsregistered--emit"></a>
+
+#### `execution-worlds/registered` — emit
+
+A provider registered (or re-registered after disposal). Emitted with the provider object; UI capability status listens for this.
+
+```ts cordis-catalog
+/**
+ * A provider registered (or re-registered after disposal). Emitted with
+ * the provider object; UI capability status listens for this.
+ * @param provider - the registered provider.
+ * @mode emit
+ */
+'execution-worlds/registered'(provider: ExecutionWorldProvider): void
+```
+
+Source: [`packages/execution/execution-world/src/index.ts:54`](../../packages/execution/execution-world/src/index.ts)
+
+<a id="execution-worldsunregistered--emit"></a>
+
+#### `execution-worlds/unregistered` — emit
+
+A provider was unregistered and its routes disappeared.
+
+```ts cordis-catalog
+/**
+ * A provider was unregistered and its routes disappeared.
+ * @param id - the removed provider id.
+ * @mode emit
+ */
+'execution-worlds/unregistered'(id: string): void
+```
+
+Source: [`packages/execution/execution-world/src/index.ts:60`](../../packages/execution/execution-world/src/index.ts)
 <!-- END GENERATED cordis-surface -->

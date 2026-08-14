@@ -108,6 +108,9 @@ export function childSessionMeta(
   const agentPreset = parent.ctx.get('agentPresets')?.composedPreset(parent.ctx)
   return {
     ...parentHeader.cwd !== undefined ? { cwd: parentHeader.cwd } : {},
+    // A child inherits its parent's execution world: an SSH session's
+    // in-process subagents keep operating in the same remote world.
+    ...parentHeader.executionLocation !== undefined ? { executionLocation: parentHeader.executionLocation } : {},
     ...agentPreset === undefined ? {} : { agentPreset },
     parentSession: parentHeader.id,
     // Navigation classification only; the descriptor remains the authority

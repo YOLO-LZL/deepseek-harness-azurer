@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"ff1c1e99-3bd4-4ef8-a954-80d607d628ba","createdAt":1783352165190,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"ff1c1e99-3bd4-4ef8-a954-80d607d628ba","createdAt":1783352165190,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498765336,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Use the bash tool to run exactly: echo HELLO. Report the tool result you got back verbatim, then stop."}],"source":{"kind":"user"},"role":"user","id":"a207bd9d-9312-46ed-baaf-7a07a6f08ae8"}]}}
 {"type":"turn/start","seq":1,"time":1785821364567,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821364567,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

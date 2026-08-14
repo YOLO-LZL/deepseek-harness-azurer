@@ -16,7 +16,7 @@
 
 修复仅适用于冷会话。对于活跃 id，`SessionPersistence.load(id)` 会等待权威内存快照完成持久化，并且只在日志平衡时返回；若活跃轮次仍未闭合，则拒绝操作，而不是添加合成的中断边界。HMR（热模块替换）会接管活跃前缀，而不会关闭其中正在进行的轮次。
 
-`SessionPersistence.inspect(id)` 会构造一个不可变的逻辑 Session，但不发布它，也不写入恢复内容。冷检查会在内存中配平中断的轮次，同时保持撕裂的物理尾部不变；检查已处于活跃状态的 Session 则借用其当前不可变快照，因此可能包含未闭合的轮次。使用协调器的实现会在有界 LRU 中保留这个精确的冷未发布 Session，因此重复历史读取与后续 `prepare(id)` 可复用同一次读取、解压、验证、冻结及 Session 构造。`prepare(id)` 会预留该 Session、提交待处理修复并返回可 dispose 的发布句柄；`load(id)` 使用相同机制提交修复，但不会发布 Session。该生命周期由 [Session 准备阶段决策](../../.agents/notes/implemented/architecture/2026-08-05-session-preparation.md)定义。
+`SessionPersistence.inspect(id)` 会构造一个不可变的逻辑 Session，但不发布它，也不写入恢复内容。冷检查会在内存中配平中断的轮次，同时保持撕裂的物理尾部不变；检查已处于活跃状态的 Session 则借用其当前不可变快照，因此可能包含未闭合的轮次。v0 header 只会获得用于独立历史查看的 v1 内存视图；`prepare(id)`、`load(id)` 与活动会话接管会拒绝它，因为它没有执行位置。使用协调器的实现会在有界 LRU 中保留这个精确的冷未发布 Session，因此重复历史读取与后续符合条件的 `prepare(id)` 可复用同一次读取、解压、验证、冻结及 Session 构造。`prepare(id)` 会预留符合条件的 Session、提交待处理修复并返回可 dispose 的发布句柄；`load(id)` 使用相同机制提交修复，但不会发布 Session。该生命周期由 [Session 准备阶段决策](../../.agents/notes/implemented/architecture/2026-08-05-session-preparation.md)定义。
 
 ## `SessionLocation`——可选的逐会话产物目标
 
@@ -40,7 +40,7 @@ interface SessionLocation {
 
 ## `SessionHeader`：日志旁的元数据
 
-每个会话的元数据与事件日志**分开**存储：格式版本、cwd、血统与 seed 边界是存储层关注点而非对话事件，因此不进入 `SessionEventMap`，也不会到达 `deriveMessages()`。header 通过 `session.header` 附加到 `Session` 上。
+每个会话的元数据与事件日志**分开**存储：格式版本、执行位置、cwd、血统与 seed 边界是存储层关注点而非对话事件，因此不进入 `SessionEventMap`，也不会到达 `deriveMessages()`。header 通过 `session.header` 附加到 `Session` 上。
 
 源码：[`packages/core/session/src/types.ts`](../../packages/core/session/src/types.ts)
 
@@ -51,8 +51,8 @@ interface SessionLocation {
 interface SessionHeader {
   /**
    * On-disk format version, stamped from {@link SESSION_FORMAT_VERSION} when the
-   * session is created. A persistence backend rejects any other version on load
-   * (no migration — see the constant).
+   * session is created. A v0 header is available only to detached history reads;
+   * a persistence backend rejects it before live execution (see the constant).
    */
   readonly version: number
   /** The session's id (mirrors the {@link Session}'s id). */
@@ -61,6 +61,13 @@ interface SessionHeader {
   readonly createdAt: number
   /** Absolute working directory the session was created in (if any). */
   readonly cwd?: string
+  /**
+   * The immutable execution location the session was created in (if any). A
+   * remote session carries its world here; `cwd` continues to hold the
+   * canonical absolute directory within that world. A header without this
+   * field (the pre-v1 format) is interpreted as the local world at `cwd`.
+   */
+  readonly executionLocation?: ExecutionLocation
   /** The session this one was forked from (seed lineage), if any. */
   readonly parentSession?: SessionId
   /**
@@ -91,11 +98,11 @@ interface SessionHeader {
 
 ## 格式拒绝：本构建无法可靠读取的日志
 
-后端用 `SessionFormatUnsupportedError` 拒绝无法可靠解读的日志，它与 `SessionPersistenceCorruptionError` 区分，因为数据没有损坏。header 的 `version` 比 `SESSION_FORMAT_VERSION` 新时，消息说明方向（"由更新的 harness 写入，请升级 harness 后打开"）；比它旧时说明本构建没有升级路径。经过 legacy 形状归一化后，本构建生成词汇表（`KNOWN_SESSION_EVENT_TYPES`，由 `gen-persistence-catalog` 生成）之外的事件类型同样被拒绝，除非该事件的信封带 `ignorable: true`：静默跳过一个不认识的必需事件可能改变日志其余部分的解读方式。后端为每个会话保留独立文件时，消息附上原始日志路径，被拒绝的文本仍然可读。JSONL 后端直接从原始 header 行拒绝外来版本，先于当前 header 形状校验和任何事件行解码，因此结构完全不同的未来格式仍会报告升级方向，绝不会报"损坏"；SQLite 则先由自己的 `SCHEMA_VERSION` pragma 把关整个文件的结构。设计理由与推迟建设的升级器链见 [session-log 版本机制 Agent Note](../../.agents/notes/implemented/architecture/2026-08-10-session-log-version-mechanism.md)。
+后端用 `SessionFormatUnsupportedError` 拒绝无法可靠解读的日志，它与 `SessionPersistenceCorruptionError` 区分，因为数据没有损坏。header 的 `version` 比 `SESSION_FORMAT_VERSION` 新时，消息说明方向（"由更新的 harness 写入，请升级 harness 后打开"）。v0 header 是唯一的更旧例外：`inspect` 和 `readFrom` 会返回 v1 内存历史视图而不改变其工件，而 `prepare`、`load`、接管和追加会拒绝它，因为它没有记录执行位置。其他更旧版本说明本构建没有升级路径。经过 legacy 形状归一化后，本构建生成词汇表（`KNOWN_SESSION_EVENT_TYPES`，由 `gen-persistence-catalog` 生成）之外的事件类型同样被拒绝，除非该事件的信封带 `ignorable: true`：静默跳过一个不认识的必需事件可能改变日志其余部分的解读方式。后端为每个会话保留独立文件时，消息附上原始日志路径，被拒绝的文本仍然可读。JSONL 后端接受 v0 header 用于历史，但会在校验当前 header 形状、解码任何事件行之前，直接从原始 header 行拒绝其他外来版本，因此结构完全不同的未来格式仍会报告升级方向，绝不会报"损坏"；SQLite 则先由自己的 `SCHEMA_VERSION` pragma 把关整个文件的结构。设计理由与推迟建设的升级器链见 [session-log 版本机制 Agent Note](../../.agents/notes/implemented/architecture/2026-08-10-session-log-version-mechanism.md)。
 
 ## `CreateSessionOptions`：seed 与元数据
 
-通过 store 创建 `Session` 时会接收 `seed`（初始回放或 fork 历史）与 `meta`（store 整合进 `SessionHeader` 的存储层字段）。store 填充 `version`/`id` 并为 `createdAt` 提供默认值；调用方可以提供已校验的绝对 `cwd`、`parentSession` 谱系、`seedLength` 种子边界、可选的粗粒度 `origin`、`delegationDepth`、用于组装该 agent（智能体）的 `agentPreset` 以及已有的 `createdAt`。`origin: 'subagent'` 让产品导航能够隐藏重复的 child 行；它不证明描述符有效，也不证明 child 可以恢复。
+通过 store 创建 `Session` 时会接收 `seed`（初始回放或 fork 历史）与 `meta`（store 整合进 `SessionHeader` 的存储层字段）。store 填充 `version`/`id` 并为 `createdAt` 提供默认值；调用方可以提供已校验的绝对 `cwd`、`executionLocation`、`parentSession` 谱系、`seedLength` 种子边界、可选的粗粒度 `origin`、`delegationDepth`、用于组装该 agent（智能体）的 `agentPreset` 以及已有的 `createdAt`。`origin: 'subagent'` 让产品导航能够隐藏重复的 child 行；它不证明描述符有效，也不证明 child 可以恢复。
 
 ```ts type-equiv
 /**
@@ -112,6 +119,7 @@ interface CreateSessionOptions {
    */
   readonly meta?: {
     readonly cwd?: string
+    readonly executionLocation?: ExecutionLocation
     readonly parentSession?: SessionId
     readonly createdAt?: number
     readonly seedLength?: number
@@ -299,8 +307,10 @@ abstract append(id: SessionId, events: readonly SessionEvent[]): Promise<void>
  * Prepare the exact unpublished Session used by resume. Implementations may
  * reuse object graphs retained by an earlier {@link inspect} after confirming
  * their durable revision is still current; disposal releases an unpublished
- * reservation. Revision retries require the durable log to remain unchanged
- * for one read/check round trip; continuous external writers may delay completion.
+ * reservation. A v0 artifact is available only through detached history
+ * reads because it records no execution location; preparation rejects it.
+ * Revision retries require the durable log to remain unchanged for one
+ * read/check round trip; continuous external writers may delay completion.
  * @param id - persisted session to prepare.
  * @param signal - optional cancellation for preparation work.
  * @returns one owned unpublished Session preparation.
@@ -311,12 +321,14 @@ async prepare(id: SessionId, signal?: AbortSignal): Promise<SessionPreparation>
  * Load an immutable balanced logical view and commit any required cold
  * recovery. A complete interrupted final turn is preserved and durably
  * closed with missing tool errors plus any open step and turn boundaries;
- * only a torn final record is discarded. Unknown versions and corruption in
- * the committed prefix reject. Implementations MUST NOT crash-repair an
- * identity still bound to a live Session: a balanced live log may return as a
- * durable snapshot, while an open live turn rejects. Returned values may be
- * shared with immutable live or prepared state and must not be mutated.
- * Revision-based implementations may wait for one stable read/check round trip.
+ * only a torn final record is discarded. A v0 artifact is history-only and
+ * rejects here because it cannot safely seed an execution. Other unsupported
+ * versions and corruption in the committed prefix also reject. Implementations
+ * MUST NOT crash-repair an identity still bound to a live Session: a balanced
+ * live log may return as a durable snapshot, while an open live turn rejects.
+ * Returned values may be shared with immutable live or prepared state and
+ * must not be mutated. Revision-based implementations may wait for one stable
+ * read/check round trip.
  * @param id - the persisted session to reload.
  * @returns the header and a log ending on a balanced `turn/end`.
  */
@@ -327,12 +339,14 @@ abstract load(id: SessionId): Promise<SessionInspection>
  * publishing it. A cold complete interrupted turn receives synthetic closers
  * in memory and a torn physical tail remains untouched. An already-live
  * Session instead yields its current immutable snapshot, which may contain an
- * open turn and its `session/end-seed` boundary. Coordinator-backed
- * implementations retain the exact cold unpublished Session for bounded
- * reuse by a later {@link prepare}. A stale ready source is reloaded; a source
- * already committing or reserved for resume remains exclusive, and inspection
- * may borrow its immutable view. Callers borrow only the immutable header and
- * log. Continuous external writers may delay revision convergence.
+ * open turn and its `session/end-seed` boundary. Inspection maps a v0 header
+ * to an in-memory current-format view for history without changing storage;
+ * {@link prepare} and {@link load} still reject that source. Coordinator-backed
+ * implementations retain the exact cold unpublished Session for bounded reuse
+ * by a later {@link prepare}. A stale ready source is reloaded; a source already
+ * committing or reserved for resume remains exclusive, and inspection may borrow
+ * its immutable view. Callers borrow only the immutable header and log.
+ * Continuous external writers may delay revision convergence.
  * @param id - the persisted session to inspect.
  * @param signal - optional cancellation for queued and backend read work.
  * @returns the validated header and current logical event log.
@@ -348,6 +362,8 @@ abstract inspect(id: SessionId, signal?: AbortSignal): Promise<SessionInspection
  * publication. Only events from the valid contiguous stored prefix are
  * returned, so a torn fragment never reaches the caller. `fromSeq` at or
  * beyond the stored prefix returns an empty event list (never an error).
+ * A v0 header maps to an in-memory current-format history view without
+ * changing storage; it remains unavailable to {@link prepare} and {@link load}.
  * Backends whose medium can seek by seq
  * (SQLite) read only the suffix; sequential media (JSONL, both encodings)
  * still parse the whole artifact and skip forward — the primitive bounds
@@ -381,5 +397,5 @@ abstract listSnapshots(signal?: AbortSignal): Promise<SessionPersistenceSnapshot
 
 Types: [SessionEvent](session.md) · [SessionId](core.md)
 
-Source: [`packages/session/session-persistence/src/index.ts:84`](../../packages/session/session-persistence/src/index.ts)
+Source: [`packages/session/session-persistence/src/index.ts:85`](../../packages/session/session-persistence/src/index.ts)
 <!-- END GENERATED cordis-surface -->

@@ -15,7 +15,7 @@ import { resolveSessionPreset } from '../src/session.ts'
 /** A header carrying the creation-time preset, if any. */
 function header(agentPreset?: string): SessionHeader {
   return {
-    version: 0,
+    version: 1,
     id: SessionId('s'),
     createdAt: 1,
     delegationDepth: 0,

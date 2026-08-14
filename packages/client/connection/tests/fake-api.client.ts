@@ -146,23 +146,27 @@ export class FakeApiClient implements IApiClient {
     listDirectory: payload => this.record('host.listDirectory', payload, this.onListDirectory(payload)),
     createDirectory: payload => this.record('host.createDirectory', payload, this.onCreateDirectory(payload)),
     openPath: payload => this.record('host.openPath', payload, this.onOpenPath(payload)),
+    sshStatus: payload => this.record('host.sshStatus', payload, Promise.resolve(ok({ available: false, configHosts: [] }))),
+    sshListDirectory: payload => this.record('host.sshListDirectory', payload, Promise.resolve(ok({ entries: [] }))),
+    sshCreateDirectory: payload => this.record('host.sshCreateDirectory', payload, Promise.resolve(ok({ path: '/w/new' }))),
+    sshProbe: payload => this.record('host.sshProbe', payload, Promise.resolve(ok({ kind: 'missing-dir' as const }))),
   }
 
   readonly workspace: IApiClient['workspace'] = {
     list: (payload: unknown) => this.record('workspace.list', payload, Promise.resolve(ok({ items: [], archivedSessionIds: [] }))),
     create: (payload: unknown) => this.record('workspace.create', payload, Promise.resolve(ok({
-      workspace: { workspaceId: 'fk-ws' as never, path: '/f/ws', title: 'ws', sessionIds: [], createdAt: '0', updatedAt: '0' },
+      workspace: { workspaceId: 'fk-ws' as never, path: '/f/ws', location: { providerId: 'local', target: null, root: '/f/ws' }, title: 'ws', sessionIds: [], createdAt: '0', updatedAt: '0' },
       created: true,
     }))),
     rename: (payload: unknown) => this.record('workspace.rename', payload, Promise.resolve(ok({
-      workspace: { workspaceId: 'fk-ws' as never, path: '/f/ws', title: 'ws', sessionIds: [], createdAt: '0', updatedAt: '0' },
+      workspace: { workspaceId: 'fk-ws' as never, path: '/f/ws', location: { providerId: 'local', target: null, root: '/f/ws' }, title: 'ws', sessionIds: [], createdAt: '0', updatedAt: '0' },
     }))),
     delete: (payload: unknown) => this.record('workspace.delete', payload, Promise.resolve(ok({ deleted: true as const }))),
     insertBefore: (payload: unknown) => this.record('workspace.insertBefore', payload, Promise.resolve(ok({
       workspaceIds: [(payload as { workspaceId: WorkspaceId }).workspaceId],
     }))),
     insertSessionBefore: (payload: unknown) => this.record('workspace.insertSessionBefore', payload, Promise.resolve(ok({
-      workspace: { workspaceId: 'fk-ws' as never, path: '/f/ws', title: 'ws', sessionIds: [], createdAt: '0', updatedAt: '0' },
+      workspace: { workspaceId: 'fk-ws' as never, path: '/f/ws', location: { providerId: 'local', target: null, root: '/f/ws' }, title: 'ws', sessionIds: [], createdAt: '0', updatedAt: '0' },
     }))),
     archiveSession: (payload: unknown) => this.record('workspace.archiveSession', payload, Promise.resolve(ok({
       archivedSessionIds: [(payload as { sessionId: SessionId }).sessionId],

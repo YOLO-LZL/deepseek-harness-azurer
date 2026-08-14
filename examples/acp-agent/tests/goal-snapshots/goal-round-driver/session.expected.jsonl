@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":0,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Create a durable two-round goal for the ACP snapshot, inspect it, then report readiness."}],"source":{"kind":"user"},"role":"user","id":"{{sessionId}}"}]}}
 {"type":"turn/start","seq":1,"time":0,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":0,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

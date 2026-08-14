@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"977a4820-f609-4b48-9039-adcdd921c5fe","createdAt":1784045702340,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"977a4820-f609-4b48-9039-adcdd921c5fe","createdAt":1784045702340,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498830615,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Use the write tool (NOT bash) to create escalated.md in the current directory containing exactly the single line: escalated. An equivalent write was denied earlier, so make this one single write call with sandbox_permissions set to danger-full-access and the justification 'the user asked to escalate this write'. Do not call write without sandbox_permissions first. I will approve the permission prompt. After the result, reply with exactly the single word DONE."}],"source":{"kind":"user"},"role":"user","id":"c2a0f1a3-11ce-4d84-bff4-49213573cb37"}]}}
 {"type":"turn/start","seq":1,"time":1785821446845,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821446846,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

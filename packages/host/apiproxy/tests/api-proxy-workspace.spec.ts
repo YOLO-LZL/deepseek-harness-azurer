@@ -264,8 +264,8 @@ describe('workspace.create', () => {
     const { api, root } = await harness()
     const target = stageDir(root, 'alpha')
     const responses = await Promise.all([
-      api.workspace.create(request({ path: target })),
-      api.workspace.create(request({ path: target })),
+      api.workspace.create(request({ kind: 'local' as const, path: target })),
+      api.workspace.create(request({ kind: 'local' as const, path: target })),
     ])
     const values = responses.map(response => expectOk(response))
     const created = values.find(value => value.created)
@@ -279,8 +279,8 @@ describe('workspace.create', () => {
   it('adopts only existing directories', async () => {
     const { api, root } = await harness()
     const existing = stageDir(root, 'existing')
-    const first = expectOk(await api.workspace.create(request({ path: existing })))
-    const repeated = expectOk(await api.workspace.create(request({ path: existing })))
+    const first = expectOk(await api.workspace.create(request({ kind: 'local' as const, path: existing })))
+    const repeated = expectOk(await api.workspace.create(request({ kind: 'local' as const, path: existing })))
     expect(first).toMatchObject({ created: true, workspace: { path: existing, title: 'existing' } })
     expect(repeated).toMatchObject({ created: false, workspace: { workspaceId: first.workspace.workspaceId } })
 
@@ -288,11 +288,11 @@ describe('workspace.create', () => {
       workspaceId: first.workspace.workspaceId,
       title: 'renamed-existing',
     })))
-    const reopened = expectOk(await api.workspace.create(request({ path: existing })))
+    const reopened = expectOk(await api.workspace.create(request({ kind: 'local' as const, path: existing })))
     expect(reopened.workspace.title).toBe('renamed-existing')
 
     const missing = join(root, 'missing')
-    const missingResult = await api.workspace.create(request({ path: missing }))
+    const missingResult = await api.workspace.create(request({ kind: 'local' as const, path: missing }))
     expect(missingResult.result).toMatchObject({ ok: false, error: { code: 'workspace-invalid-path' } })
     expect(existsSync(missing)).toBe(false)
   })
@@ -303,8 +303,8 @@ describe('workspace.create', () => {
     const second = join(root, 'two', 'project')
     mkdirSync(first, { recursive: true })
     mkdirSync(second, { recursive: true })
-    const firstResult = expectOk(await api.workspace.create(request({ path: first })))
-    const secondResult = expectOk(await api.workspace.create(request({ path: second })))
+    const firstResult = expectOk(await api.workspace.create(request({ kind: 'local' as const, path: first })))
+    const secondResult = expectOk(await api.workspace.create(request({ kind: 'local' as const, path: second })))
     expect(firstResult).toMatchObject({
       created: true,
       workspace: { path: first, title: 'project' },
@@ -322,9 +322,9 @@ describe('workspace.create', () => {
 describe('workspace.insertBefore', () => {
   it('commits the complete order, streams one order frame, and maps unknown ids', async () => {
     const { api, ctx, root } = await harness()
-    const first = expectOk(await api.workspace.create(request({ path: stageDir(root, 'first') }))).workspace
-    const second = expectOk(await api.workspace.create(request({ path: stageDir(root, 'second') }))).workspace
-    const third = expectOk(await api.workspace.create(request({ path: stageDir(root, 'third') }))).workspace
+    const first = expectOk(await api.workspace.create(request({ kind: 'local' as const, path: stageDir(root, 'first') }))).workspace
+    const second = expectOk(await api.workspace.create(request({ kind: 'local' as const, path: stageDir(root, 'second') }))).workspace
+    const third = expectOk(await api.workspace.create(request({ kind: 'local' as const, path: stageDir(root, 'third') }))).workspace
 
     const abort = new AbortController()
     const listWorkspaces = vi.spyOn(ctx.workspaceRegistry, 'list')
@@ -366,7 +366,7 @@ describe('workspace.insertBefore', () => {
 describe('session creation and Workspace membership', () => {
   it('attaches a preallocated idempotent session while cwd-only sessions stay ungrouped', async () => {
     const { api, ctx, root } = await harness()
-    const workspace = expectOk(await api.workspace.create(request({ path: stageDir(root, 'project') }))).workspace
+    const workspace = expectOk(await api.workspace.create(request({ kind: 'local' as const, path: stageDir(root, 'project') }))).workspace
     const sessionId = SessionId('session-workspace-preallocated')
 
     expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId, sessionId })))
@@ -393,7 +393,7 @@ describe('session creation and Workspace membership', () => {
 
   it('retains a published session when attachment fails and repairs it on retry', async () => {
     const { api, ctx, root } = await harness()
-    const created = expectOk(await api.workspace.create(request({ path: stageDir(root, 'project') }))).workspace
+    const created = expectOk(await api.workspace.create(request({ kind: 'local' as const, path: stageDir(root, 'project') }))).workspace
     const workspace = ctx.workspaceRegistry.list()[0]
     if (workspace === undefined) throw new Error('workspace missing from registry')
     vi.spyOn(workspace, 'attachSession').mockRejectedValueOnce(new Error('simulated write failure'))
@@ -451,7 +451,7 @@ describe('Host Workspace increments', () => {
     const stream: AsyncIterator<RpcRequest<HostFrame>> =
       api.events.host(request({}), abort.signal)[Symbol.asyncIterator]()
     const workspaceIncrement = nextHostFrame(stream)
-    const workspace = expectOk(await api.workspace.create(request({ path: stageDir(root, 'project') }))).workspace
+    const workspace = expectOk(await api.workspace.create(request({ kind: 'local' as const, path: stageDir(root, 'project') }))).workspace
     expect(await workspaceIncrement).toMatchObject({
       payload: { type: 'host/workspace-changed', workspace: { workspaceId: workspace.workspaceId } },
     })
@@ -488,7 +488,7 @@ describe('Host Workspace increments', () => {
       api.events.host(request({}), abort.signal)[Symbol.asyncIterator]()
     const next = stream.next()
 
-    const failed = await api.workspace.create(request({ path: stageDir(root, 'ghost') }))
+    const failed = await api.workspace.create(request({ kind: 'local' as const, path: stageDir(root, 'ghost') }))
     expect(failed.result.ok).toBe(false)
     expect(expectOk(await api.workspace.list(request({}))).items).toEqual([])
     abort.abort()
@@ -497,7 +497,7 @@ describe('Host Workspace increments', () => {
 
   it('deletes the registration, keeps its session and folder, and streams one removal', async () => {
     const { api, ctx, root } = await harness()
-    const workspace = expectOk(await api.workspace.create(request({ path: stageDir(root, 'delete-me') }))).workspace
+    const workspace = expectOk(await api.workspace.create(request({ kind: 'local' as const, path: stageDir(root, 'delete-me') }))).workspace
     const sessionId = SessionId('session-kept-after-workspace-delete')
     expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId, sessionId })))
 
@@ -520,7 +520,7 @@ describe('Host Workspace increments', () => {
       error: { code: 'workspace-not-found', details: { workspaceId: workspace.workspaceId } },
     })
 
-    const reregistered = expectOk(await api.workspace.create(request({ path: workspace.path }))).workspace
+    const reregistered = expectOk(await api.workspace.create(request({ kind: 'local' as const, path: workspace.path }))).workspace
     expect(reregistered.workspaceId).not.toBe(workspace.workspaceId)
     expect(reregistered.path).toBe(workspace.path)
     expect(reregistered.sessionIds).toEqual([])
@@ -530,7 +530,7 @@ describe('Host Workspace increments', () => {
 
   it('archives a session into the global set, keeps its accounting, and streams the set once', async () => {
     const { api, root } = await harness()
-    const workspace = expectOk(await api.workspace.create(request({ path: stageDir(root, 'archive-home') }))).workspace
+    const workspace = expectOk(await api.workspace.create(request({ kind: 'local' as const, path: stageDir(root, 'archive-home') }))).workspace
     const sessionId = SessionId('session-to-archive')
     expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId, sessionId })))
     expect(expectOk(await api.workspace.list(request({}))).archivedSessionIds).toEqual([])

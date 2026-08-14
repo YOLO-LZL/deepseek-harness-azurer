@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"{{sessionId}}","createdAt":1785004180013,"cwd":"{{cwd}}/workspace"}
+{"type":"session","version":1,"id":"{{sessionId}}","createdAt":1785004180013,"cwd":"{{cwd}}/workspace"}
 {"type":"turn/start","seq":0,"time":1785004180030,"data":{"turn":1,"trigger":{"kind":"message","source":{"kind":"user","rpcId":"{{rpcId}}"}}}}
 {"type":"user/message","seq":1,"time":1785004180030,"data":{"content":[{"type":"text","text":"Use the ask_user_question tool to ask me exactly one question with id \"checkpoint\", question \"Ready to continue?\", header \"Checkpoint\", and options labeled \"Yes\" and \"No\". After I answer, reply with one short sentence acknowledging my answer and stop."}],"source":{"kind":"user","rpcId":"{{rpcId}}"}},"surfaceOp":"append"}
 {"type":"session/title","seq":2,"time":1785004180033,"data":{"title":"Use the ask_user_question tool to","messageSeqs":[1],"source":{"kind":"fallback"}}}

@@ -10,6 +10,7 @@ import { createSnapshotStore } from '../contract/store.ts'
 import type { SessionsPort, SessionsPortList } from '../contract/sessions-port.ts'
 import type { IWorkspaces } from '../contract/workspaces.ts'
 import { WorkspaceManager, type WorkspaceListPhase } from './manager.ts'
+import type { WorkspaceCreateInput } from './workspace.ts'
 
 /** Workspace list plus the two-baseline readiness and default-target projection. */
 export interface WorkspaceListState {
@@ -192,11 +193,11 @@ export class WorkspaceRuntime implements IWorkspaces {
   }
 
   /**
-   * Register an existing path as a Workspace.
-   * @param input - the Host create payload.
+   * Register an existing path (or a provider target) as a Workspace.
+   * @param input - the discriminated Host create payload (local path or provider target).
    * @returns the created or idempotently resolved Workspace.
    */
-  async create(input: { path: string }): Promise<WorkspaceView> {
+  async create(input: WorkspaceCreateInput): Promise<WorkspaceView> {
     const result = await this.manager.create(input)
     if (!result.ok) throw new WorkspaceCreateError(result.error)
     return result.value.workspace

@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"4428b809-66d5-4ea2-9a03-89de742fcda1","createdAt":1785591986068,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"4428b809-66d5-4ea2-9a03-89de742fcda1","createdAt":1785591986068,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785815911816,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Call glob exactly once with pattern * and path tree. Then reply with exactly GLOB_SAMPLED and nothing else."}],"source":{"kind":"user"},"role":"user","id":"f9744e3d-5b10-4519-bc82-b4f890cf7659"}]}}
 {"type":"turn/start","seq":1,"time":1785821384580,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821384580,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

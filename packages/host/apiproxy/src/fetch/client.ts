@@ -16,6 +16,7 @@ import { hostFrameSchema, muxFrameSchema } from '../api/events.schema.ts'
 import {
   hostCreateDirectoryValueSchema, hostDescribeValueSchema,
   hostListDirectoryValueSchema, hostOpenPathValueSchema, hostPickDirectoryValueSchema,
+  hostSshCreateDirectoryValueSchema, hostSshListDirectoryValueSchema, hostSshProbeValueSchema, hostSshStatusValueSchema,
 } from '../api/host.schema.ts'
 import {
   sessionCancelValueSchema,
@@ -111,6 +112,10 @@ export interface IApiClient {
     listDirectory(payload: RequestPayload<'host.listDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.listDirectory'>>>
     createDirectory(payload: RequestPayload<'host.createDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.createDirectory'>>>
     openPath(payload: RequestPayload<'host.openPath'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.openPath'>>>
+    sshStatus(payload: RequestPayload<'host.sshStatus'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.sshStatus'>>>
+    sshListDirectory(payload: RequestPayload<'host.sshListDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.sshListDirectory'>>>
+    sshCreateDirectory(payload: RequestPayload<'host.sshCreateDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.sshCreateDirectory'>>>
+    sshProbe(payload: RequestPayload<'host.sshProbe'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.sshProbe'>>>
   }
   workspace: {
     list(payload: RequestPayload<'workspace.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.list'>>>
@@ -191,6 +196,10 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'host.listDirectory': hostListDirectoryValueSchema,
   'host.createDirectory': hostCreateDirectoryValueSchema,
   'host.openPath': hostOpenPathValueSchema,
+  'host.sshStatus': hostSshStatusValueSchema,
+  'host.sshListDirectory': hostSshListDirectoryValueSchema,
+  'host.sshCreateDirectory': hostSshCreateDirectoryValueSchema,
+  'host.sshProbe': hostSshProbeValueSchema,
   'workspace.list': workspaceListValueSchema,
   'workspace.create': workspaceCreateValueSchema,
   'workspace.rename': workspaceRenameValueSchema,
@@ -441,6 +450,10 @@ export abstract class AbstractApiClient implements IApiClient {
     listDirectory: (payload, signal) => this.callUnary('host.listDirectory', payload, signal),
     createDirectory: (payload, signal) => this.callUnary('host.createDirectory', payload, signal),
     openPath: (payload, signal) => this.callUnary('host.openPath', payload, signal),
+    sshStatus: (payload, signal) => this.callUnary('host.sshStatus', payload, signal),
+    sshListDirectory: (payload, signal) => this.callUnary('host.sshListDirectory', payload, signal),
+    sshCreateDirectory: (payload, signal) => this.callUnary('host.sshCreateDirectory', payload, signal),
+    sshProbe: (payload, signal) => this.callUnary('host.sshProbe', payload, signal),
   }
 
   readonly workspace: IApiClient['workspace'] = {

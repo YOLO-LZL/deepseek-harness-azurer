@@ -70,7 +70,7 @@ function seedLog(): string {
   const at = (index: number, event: Record<string, unknown>): string =>
     JSON.stringify({ ...event, seq: index, time: time + index })
   return [
-    JSON.stringify({ type: 'session', version: 0, id: '{{sessionId}}', createdAt: time, cwd: '{{cwd}}/workspace' }),
+    JSON.stringify({ type: 'session', version: 1, id: '{{sessionId}}', createdAt: time, cwd: '{{cwd}}/workspace' }),
     at(0, { type: 'turn/start', data: { turn: 1, trigger: { kind: 'message', source: { kind: 'user', rpcId: 'seed' } } } }),
     at(1, {
       type: 'user/message',

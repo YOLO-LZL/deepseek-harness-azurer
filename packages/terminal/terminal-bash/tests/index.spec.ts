@@ -46,7 +46,7 @@ function config(): ResolvedConfig {
 
 function agent(ctx: Context, cwd?: string): Agent {
   const id = SessionId('agent')
-  const session = Session.create(id, undefined, { version: 0, id, createdAt: 0, ...cwd === undefined ? {} : { cwd } })
+  const session = Session.create(id, undefined, { version: 1, id, createdAt: 0, ...cwd === undefined ? {} : { cwd } })
   return {
     id, options: {}, session, inbox: new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed: () => {} }),
     status: 'idle',

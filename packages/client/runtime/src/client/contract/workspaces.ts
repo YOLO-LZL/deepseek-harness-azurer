@@ -7,6 +7,7 @@
  * widening what features may do to the workspaces domain.
  */
 import type { DirectoryListing, SessionId, WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-remotes/client'
+import type { WorkspaceCreateInput } from '../workspaces/workspace.ts'
 import type { WorkspaceListState } from '../workspaces/service.ts'
 import type { ObservableSnapshot } from './store.ts'
 
@@ -29,11 +30,11 @@ export interface IWorkspaces {
    */
   startSession(workspaceId?: WorkspaceId): void
   /**
-   * Register an existing path as a Workspace.
-   * @param input - the Host create payload.
+   * Register an existing path (or a provider target) as a Workspace.
+   * @param input - the discriminated Host create payload.
    * @returns the created or idempotently resolved Workspace.
    */
-  create(input: { path: string }): Promise<WorkspaceView>
+  create(input: WorkspaceCreateInput): Promise<WorkspaceView>
   /**
    * Open the Host's native directory picker.
    * @returns the selected path, or null when the user cancelled.

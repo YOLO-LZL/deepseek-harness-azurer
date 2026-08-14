@@ -14,6 +14,7 @@ function fakeWorkspace(id: string, over: Partial<WorkspaceView> = {}): Workspace
   return {
     workspaceId: id as WorkspaceId,
     path: '/f/ws',
+    location: { providerId: 'local', target: null, root: '/f/ws' },
     title: 'ws',
     sessionIds: [],
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -180,6 +181,10 @@ export class FakeApiClient implements IApiClient {
     listDirectory: (payload: unknown) => this.record('host.listDirectory', payload, this.onListDirectory(payload)),
     createDirectory: (payload: unknown) => this.record('host.createDirectory', payload, this.onCreateDirectory(payload)),
     openPath: (payload: unknown) => this.record('host.openPath', payload, this.onOpenPath(payload)),
+    sshStatus: (payload: unknown) => this.record('host.sshStatus', payload, Promise.resolve(ok({ available: false, configHosts: [] }))),
+    sshListDirectory: (payload: unknown) => this.record('host.sshListDirectory', payload, Promise.resolve(ok({ entries: [] }))),
+    sshCreateDirectory: (payload: unknown) => this.record('host.sshCreateDirectory', payload, Promise.resolve(ok({ path: '/w/new' }))),
+    sshProbe: (payload: unknown) => this.record('host.sshProbe', payload, Promise.resolve(ok({ kind: 'missing-dir' as const }))),
   }
 
   // The archive-set field defaults at the binding below so list stubs keep

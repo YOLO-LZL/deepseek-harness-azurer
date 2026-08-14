@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"11111111-1111-4111-8111-111111111111","createdAt":1783950000000,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"11111111-1111-4111-8111-111111111111","createdAt":1783950000000,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498801734,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Run this advanced flow exactly once: define a host-only dynamic Cordis Package named Snapshot Marker; run and inspect snap-1/pkg-1 through run_code; delegate once to a direct spawn child; run one workflow that delegates to another spawn child; remove snap-1; then reply with exactly ADVANCED_ACP_OK."}],"source":{"kind":"user"},"role":"user","id":"6a989c18-ce01-46ce-8105-43789f710fb5"}]}}
 {"type":"turn/start","seq":1,"time":1785821417918,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821417919,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

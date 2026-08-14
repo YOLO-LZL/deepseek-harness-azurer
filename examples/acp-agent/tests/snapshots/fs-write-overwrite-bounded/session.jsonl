@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"14b14f51-2428-43a0-bcc5-5f392d4faa19","createdAt":1786204699215,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"14b14f51-2428-43a0-bcc5-5f392d4faa19","createdAt":1786204699215,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1786204699218,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"First use the read tool to read data.txt in the current directory. Then use the write tool (NOT bash) to replace its entire contents with exactly this single line: The replacement line is deliberately longer than the configured sixty-four byte diff-basis bound. Then reply with exactly the single word DONE."}],"source":{"kind":"user"},"role":"user","id":"41d72cfe-0e37-474f-83dc-2b15bacf9c0d"}]}}
 {"type":"turn/start","seq":1,"time":1786204699219,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1786204699220,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

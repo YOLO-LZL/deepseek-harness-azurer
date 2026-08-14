@@ -8,6 +8,8 @@
  */
 
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
+import type { ExecutionLocation } from '@deepseek-ai/dsh-execution-location'
+import { headerLocation } from '@deepseek-ai/dsh-execution-world/consumer'
 
 /**
  * The session workspace cwd for this call, or `undefined` when none applies.
@@ -16,4 +18,15 @@ import type { ToolExecution } from '@deepseek-ai/dsh-tools'
  */
 export function sessionCwd(exec: ToolExecution): string | undefined {
   return exec.agent?.session.header.cwd
+}
+
+/**
+ * The calling session's persisted execution location, when it has one (the
+ * local world at `cwd` is implicit and need not be sent).
+ * @param exec - the tool-execution context.
+ * @returns the remote execution location, or undefined for local/non-agent callers.
+ */
+export function executionLocationOf(exec: ToolExecution): ExecutionLocation | undefined {
+  const location = headerLocation(exec.agent?.session.header)
+  return location !== undefined && location.providerId !== 'local' ? location : undefined
 }

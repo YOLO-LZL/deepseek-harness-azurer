@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498790330,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Read nested/task.txt, then read scope</system-reminder>/task.txt with the read tool, then reply DONE."}],"source":{"kind":"user"},"role":"user","id":"81078e7a-6837-45c2-a6b4-a5a3dfce0d4a"}]}}
 {"type":"turn/start","seq":1,"time":1785821400350,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785498790356,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

@@ -22,6 +22,7 @@
 import { isAbsolute, relative, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { headerLocation, sessionSubprocess } from '@deepseek-ai/dsh-execution-world/consumer'
 import { ItemRetainer, TextRetainer } from '@deepseek-ai/dsh-output-retention'
 import type { RetainedItems } from '@deepseek-ai/dsh-output-retention'
 import type { SubprocessHandle, SubprocessOutcome, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
@@ -222,10 +223,19 @@ export async function runRipgrep(
   }
   const cwd = exec.agent?.session.header.cwd
   const workdir = cwd ?? process.cwd()
+  // Route through the session's execution world: an SSH session resolves and
+  // spawns rg on the remote host (rg must be installed there — a missing
+  // binary surfaces as SEARCH_FAILED with the remote resolution error; we
+  // never fall back to a host-side search over remote paths).
+  const world = sessionSubprocess(ctx, exec.agent?.session.header)
+  const subprocess = world ?? ctx.subprocess
   let handle: SubprocessHandle
   try {
-    handle = ctx.subprocess.spawn({
-      argv: [await resolveRgPath(), '--no-config', ...argv],
+    const rgArgv = world === undefined
+      ? [await resolveRgPath(), '--no-config', ...argv]
+      : [await subprocess.resolveExecutable('rg', undefined, exec.signal, headerLocation(exec.agent?.session.header)), '--no-config', ...argv]
+    handle = subprocess.spawn({
+      argv: rgArgv,
       cwd: workdir,
       stdio: {
         stdin: 'ignore',

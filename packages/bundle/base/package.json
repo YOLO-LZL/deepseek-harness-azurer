@@ -39,6 +39,11 @@
     }
   },
   "dependencies": {
+    "@deepseek-ai/dsh-workspace-ssh": "workspace:^",
+    "@deepseek-ai/dsh-tool-ssh": "workspace:^",
+    "@deepseek-ai/dsh-ssh": "workspace:^",
+    "@deepseek-ai/dsh-execution-world": "workspace:^",
+    "@deepseek-ai/dsh-e2b": "workspace:^",
     "@deepseek-ai/cordis-plugin-hmr": "workspace:^",
     "@deepseek-ai/cordis-plugin-timer": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",

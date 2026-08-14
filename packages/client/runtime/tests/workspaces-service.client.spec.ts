@@ -11,7 +11,7 @@ const wid = (id: string): WorkspaceId => id as WorkspaceId
 
 function workspace(id: string, sessionIds: SessionId[] = [], createdAt = '2026-01-01T00:00:00.000Z'): WorkspaceView {
   return {
-    workspaceId: wid(id), path: `/w/${id}`, title: id, sessionIds,
+    workspaceId: wid(id), path: `/w/${id}`, location: { providerId: 'local', target: null, root: `/w/${id}` }, title: id, sessionIds,
     createdAt, updatedAt: createdAt,
   }
 }
@@ -67,12 +67,12 @@ describe('WorkspaceManager', () => {
       created: true,
       payload,
     } as never))
-    await expect(manager.create({ path: '/w/created' })).resolves.toMatchObject({ ok: true })
+    await expect(manager.create({ kind: 'local' as const, path: '/w/created' })).resolves.toMatchObject({ ok: true })
     expect(api.callsOf('workspace.create')).toEqual([{ path: '/w/created' }])
     expect(manager.getSnapshot().items[0]?.workspaceId).toBe('created')
 
     api.onWorkspaceCreate = () => Promise.reject(new Error('create transport'))
-    await expect(manager.create({ path: '/w/existing' })).resolves.toMatchObject({
+    await expect(manager.create({ kind: 'local' as const, path: '/w/existing' })).resolves.toMatchObject({
       ok: false, error: { code: 'internal', message: 'create transport' },
     })
   })
@@ -303,13 +303,13 @@ describe('WorkspaceRuntime', () => {
     api.onWorkspaceCreate = () => Promise.resolve(ok({
       workspace: { ...workspace('picked'), path: '/w/alpha', title: 'alpha' }, created: true,
     }))
-    await expect(workspaces.create({ path: '/w/alpha' })).resolves.toMatchObject({ workspaceId: 'picked' })
+    await expect(workspaces.create({ kind: 'local' as const, path: '/w/alpha' })).resolves.toMatchObject({ workspaceId: 'picked' })
     expect(workspaces.list.getSnapshot().items[0]).toMatchObject({ path: '/w/alpha', title: 'alpha' })
     expect(api.callsOf('workspace.create')).toEqual([{ path: '/w/alpha' }])
     api.onWorkspaceCreate = () => Promise.resolve(err({
       code: 'workspace-invalid-path', message: 'missing', details: { path: '/missing' },
     }))
-    const rejected = workspaces.create({ path: '/missing' })
+    const rejected = workspaces.create({ kind: 'local' as const, path: '/missing' })
     await expect(rejected).rejects.toThrow(/workspace-invalid-path: missing/)
     await expect(rejected).rejects.toBeInstanceOf(WorkspaceCreateError)
   })

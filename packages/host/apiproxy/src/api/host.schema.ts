@@ -72,3 +72,66 @@ export const hostOpenPathRequestSchema = z.object({
 export const hostOpenPathValueSchema = z.object({
   opened: z.literal(true),
 }) satisfies z.ZodType<Wire<ResponseValue<'host.openPath'>>>
+
+/** host.sshStatus request payload (empty object literal). */
+export const hostSshStatusRequestSchema = z.object({}) satisfies z.ZodType<Wire<RequestPayload<'host.sshStatus'>>>
+
+/** One read-only ~/.ssh/config alias row. */
+const sshConfigHostSchema = z.object({
+  alias: z.string(),
+  hostName: z.string(),
+  user: z.string().optional(),
+  port: z.number().optional(),
+  identityFile: z.string().optional(),
+})
+
+/** host.sshStatus response value. */
+export const hostSshStatusValueSchema = z.object({
+  available: z.boolean(),
+  configHosts: z.array(sshConfigHostSchema),
+}) satisfies z.ZodType<Wire<ResponseValue<'host.sshStatus'>>>
+
+/** One ssh directory RPC's target: a saved connection id or a config alias (exactly one). */
+const sshDirectoryTargetSchema = z.object({
+  connectionId: z.string().optional(),
+  alias: z.string().optional(),
+}).refine(
+  payload => (payload.connectionId === undefined) !== (payload.alias === undefined),
+  { message: 'host.ssh* requires exactly one of connectionId or alias' },
+)
+
+/** host.sshListDirectory request payload. */
+export const hostSshListDirectoryRequestSchema = sshDirectoryTargetSchema.extend({
+  path: z.string(),
+}) satisfies z.ZodType<Wire<RequestPayload<'host.sshListDirectory'>>>
+
+/** host.sshListDirectory response value. */
+export const hostSshListDirectoryValueSchema = z.object({
+  entries: z.array(z.object({
+    name: z.string(),
+    type: z.enum(['file', 'directory', 'other']),
+    size: z.number().optional(),
+  })),
+}) satisfies z.ZodType<Wire<ResponseValue<'host.sshListDirectory'>>>
+
+/** host.sshCreateDirectory request payload. */
+export const hostSshCreateDirectoryRequestSchema = sshDirectoryTargetSchema.extend({
+  path: z.string(),
+  name: z.string().min(1),
+}) satisfies z.ZodType<Wire<RequestPayload<'host.sshCreateDirectory'>>>
+
+/** host.sshCreateDirectory response value. */
+export const hostSshCreateDirectoryValueSchema = z.object({
+  path: z.string(),
+}) satisfies z.ZodType<Wire<ResponseValue<'host.sshCreateDirectory'>>>
+
+/** host.sshProbe request payload. */
+export const hostSshProbeRequestSchema = sshDirectoryTargetSchema.extend({
+  path: z.string(),
+}) satisfies z.ZodType<Wire<RequestPayload<'host.sshProbe'>>>
+
+/** host.sshProbe response value. */
+export const hostSshProbeValueSchema = z.object({
+  kind: z.enum(['ok', 'missing-dir', 'unreachable', 'invalid']),
+  message: z.string().optional(),
+}) satisfies z.ZodType<Wire<ResponseValue<'host.sshProbe'>>>

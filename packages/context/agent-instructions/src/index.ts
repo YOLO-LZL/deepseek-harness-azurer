@@ -15,6 +15,7 @@ import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
 import type { ToolExecution, ToolExecutionResult, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
+import { sessionFileSystem } from '@deepseek-ai/dsh-execution-world/consumer'
 import { Config, resolveConfig, workspaceBaselineIdentity, type ResolvedConfig } from './config.ts'
 import { findProjectRoot, loadBaselineInstructionSet } from './files.ts'
 import {
@@ -122,7 +123,11 @@ export function apply(ctx: Context, config: Config): void {
     const authorityMessages = [...claimed]
     /* v8 ignore next -- normal agents carry an absolute session cwd. */
     const cwd = agent.session.header.cwd ?? process.cwd()
-    const projectRoot = await findProjectRoot(cwd, resolved.projectRootMarkers, fileSystem, signal)
+    // Remote (SSH) sessions read project instructions through their world's
+    // filesystem; `cwd` stays the canonical absolute directory in that world.
+    const worldFs = sessionFileSystem(ctx, agent.session.header)
+    const world = worldFs ?? fileSystem
+    const projectRoot = await findProjectRoot(cwd, resolved.projectRootMarkers, world, signal)
     const identity = workspaceBaselineIdentity(resolved, cwd, projectRoot)
     const visibleBaseline = visibleBaselineSource(agent, authorityMessages)
     const baselinePresent = visibleBaseline !== undefined
@@ -145,7 +150,7 @@ export function apply(ctx: Context, config: Config): void {
         projectRoot,
         replacePreviousBaseline,
         signal,
-      }, fileSystem)
+      }, world)
       const baseline = baselineInstructionState(instructions?.included ?? [])
       const observedBaseline = baselineInstructionState(instructions?.observed ?? [])
       const excludedScopes = new Set(observedBaseline.changes.keys())

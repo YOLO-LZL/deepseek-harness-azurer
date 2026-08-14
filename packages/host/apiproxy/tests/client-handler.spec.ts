@@ -78,15 +78,19 @@ function scriptedApi(overrides: {
       listDirectory: r => ok(r, { path: '/t', home: '/t', crumbs: [], entries: [], truncated: false }),
       createDirectory: r => ok(r, { path: '/t/new' }),
       openPath: r => ok(r, { opened: true as const }),
+      sshStatus: r => ok(r, { available: false, configHosts: [] }),
+      sshListDirectory: r => ok(r, { entries: [] }),
+      sshCreateDirectory: r => ok(r, { path: '/t/new' }),
+      sshProbe: r => ok(r, { kind: 'ok' as const }),
       ...overrides.host,
     },
     workspace: {
       list: r => ok(r, { items: [], archivedSessionIds: [] }),
-      create: r => ok(r, { workspace: { workspaceId: 'w1' as never, path: '/t', title: 't', sessionIds: [], createdAt: '0', updatedAt: '0' }, created: true }),
-      rename: r => ok(r, { workspace: { workspaceId: 'w1' as never, path: '/t', title: 't', sessionIds: [], createdAt: '0', updatedAt: '0' } }),
+      create: r => ok(r, { workspace: { workspaceId: 'w1' as never, path: '/t', title: 't', location: { providerId: 'local', target: null, root: '/t' }, sessionIds: [], createdAt: '0', updatedAt: '0' }, created: true }),
+      rename: r => ok(r, { workspace: { workspaceId: 'w1' as never, path: '/t', title: 't', location: { providerId: 'local', target: null, root: '/t' }, sessionIds: [], createdAt: '0', updatedAt: '0' } }),
       delete: r => ok(r, { deleted: true as const }),
       insertBefore: r => ok(r, { workspaceIds: [r.payload.workspaceId] }),
-      insertSessionBefore: r => ok(r, { workspace: { workspaceId: 'w1' as never, path: '/t', title: 't', sessionIds: [], createdAt: '0', updatedAt: '0' } }),
+      insertSessionBefore: r => ok(r, { workspace: { workspaceId: 'w1' as never, path: '/t', title: 't', location: { providerId: 'local', target: null, root: '/t' }, sessionIds: [], createdAt: '0', updatedAt: '0' } }),
       archiveSession: r => ok(r, { archivedSessionIds: [r.payload.sessionId] }),
     },
     skills: { list: r => ok(r, { skills: [] }), ...overrides.skills },
@@ -428,7 +432,7 @@ describe('workspace domain round trip', () => {
     const c = client(scriptedApi())
     const list = await c.workspace.list({})
     expect(list.result).toEqual({ ok: true, value: { items: [], archivedSessionIds: [] } })
-    const created = await c.workspace.create({ path: '/t' })
+    const created = await c.workspace.create({ kind: 'local' as const, path: '/t' })
     expect(created.result.ok).toBe(true)
     if (created.result.ok) expect(created.result.value.created).toBe(true)
     const archivedResponse = await c.workspace.archiveSession({ sessionId: 's-arch' as never })

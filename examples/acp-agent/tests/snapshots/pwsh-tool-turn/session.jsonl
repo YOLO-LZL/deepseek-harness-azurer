@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"0b7ff6ab-2486-4b2f-a43e-0fa29a1a46ed","createdAt":1785678162241,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"0b7ff6ab-2486-4b2f-a43e-0fa29a1a46ed","createdAt":1785678162241,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785898456879,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Use the pwsh tool to run exactly: [Console]::Out.Write('PWSH_OK'). Then reply with the single word DONE and stop."}],"source":{"kind":"user"},"role":"user","id":"b4ce4fdc-a87a-41d0-b418-80a0fb235abb"}]}}
 {"type":"turn/start","seq":1,"time":1785898456880,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785898456880,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

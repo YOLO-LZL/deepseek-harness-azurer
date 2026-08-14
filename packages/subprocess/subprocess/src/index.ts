@@ -9,6 +9,7 @@
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
+import type { ExecutionLocation } from '@deepseek-ai/dsh-execution-location'
 import { DSH_ENV_PREFIX } from './types.ts'
 import type { SubprocessHandle, SubprocessSpawnSpec } from './types.ts'
 import type { SubprocessTerminalHandle, SubprocessTerminalSpawnSpec } from './types.ts'
@@ -113,12 +114,17 @@ export abstract class SubprocessRuntime extends Service {
    * @param command - absolute executable path or bare PATH name.
    * @param env - explicit environment entries used for lookup.
    * @param signal - aborts remote or local lookup.
+   * @param world - the execution world the executable belongs to, when the
+   *   caller routes through the registry; the backend validates the world is
+   *   its own and resolves in its world syntax. Omitted keeps the backend's
+   *   default world.
    * @returns a canonical executable path.
    */
   abstract resolveExecutable(
     command: string,
     env?: Readonly<Record<string, string>>,
     signal?: AbortSignal,
+    world?: ExecutionLocation,
   ): Promise<string>
 
   /**

@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"9eb4181f-2d05-49d3-98fc-3711fe2f5664","createdAt":1783654655599,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"9eb4181f-2d05-49d3-98fc-3711fe2f5664","createdAt":1783654655599,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498773710,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Load the snapshot-skill skill with the skill tool, then reply DONE."}],"source":{"kind":"user"},"role":"user","id":"0ca31b92-27ac-451d-98d3-d1e5f605454b"}]}}
 {"type":"turn/start","seq":1,"time":1785821378605,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821378605,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

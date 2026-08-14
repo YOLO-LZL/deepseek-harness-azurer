@@ -16,6 +16,9 @@
       "path": "../../../vendor/schemastery"
     },
     {
+      "path": "../../execution/execution-location"
+    },
+    {
       "path": "../../llm/llm"
     },
     {

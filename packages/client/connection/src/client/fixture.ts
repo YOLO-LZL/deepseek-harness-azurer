@@ -1554,6 +1554,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
   const workspaces: WorkspaceView[] = options.empty ? [] : [{
     workspaceId: wid('fx-ws-fixture'),
     path: '/tmp/fixture',
+    location: { providerId: 'local', target: null, root: '/tmp/fixture' },
     title: 'fixture',
     sessionIds: [sid('fx-alpha'), sid('fx-beta'), sid('fx-gamma')],
     createdAt: fixtureEpoch,
@@ -2562,6 +2563,10 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         return ok(request, { path: target })
       },
       openPath: request => ok(request, { opened: true as const }),
+      sshStatus: request => ok(request, { available: false, configHosts: [] }),
+      sshListDirectory: request => ok(request, { entries: [] }),
+      sshCreateDirectory: request => ok(request, { path: request.payload.path }),
+      sshProbe: request => ok(request, { kind: 'missing-dir' as const }),
     },
     workspace: {
       list: request => ok(request, {
@@ -2569,13 +2574,14 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         archivedSessionIds: [...archivedSessionIds],
       }),
       create: (request) => {
-        const { path } = request.payload
+        const path = request.payload.path
         const existing = workspaces.find(w => w.path === path)
         if (existing !== undefined) return ok(request, { workspace: { ...existing }, created: false })
         const now = new Date().toISOString()
         const created: WorkspaceView = {
           workspaceId: wid(`fx-ws-${nextWorkspace++}`),
           path,
+          location: { providerId: 'local', target: null, root: path },
           title: path.split('/').filter(Boolean).at(-1) ?? path,
           sessionIds: [],
           createdAt: now,
@@ -3098,6 +3104,10 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'host.listDirectory': return this.api.host.listDirectory(request, new AbortController().signal)
       case 'host.createDirectory': return this.api.host.createDirectory(request)
       case 'host.openPath': return this.api.host.openPath(request, new AbortController().signal)
+      case 'host.sshStatus': return this.api.host.sshStatus(request)
+      case 'host.sshListDirectory': return this.api.host.sshListDirectory(request)
+      case 'host.sshCreateDirectory': return this.api.host.sshCreateDirectory(request)
+      case 'host.sshProbe': return this.api.host.sshProbe(request)
       case 'workspace.list': return this.api.workspace.list(request)
       case 'workspace.create': return this.api.workspace.create(request)
       case 'workspace.rename': return this.api.workspace.rename(request)

@@ -20,7 +20,7 @@ const t: WorkspacePickerProps['t'] = makeTranslate(zh, commonZh)
 const wid = (id: string) => id as WorkspaceId
 function workspace(id: string, title = id): WorkspaceView {
   return {
-    workspaceId: wid(id), path: `/projects/${id}`, title, sessionIds: [],
+    workspaceId: wid(id), path: `/projects/${id}`, location: { providerId: 'local', target: null, root: `/projects/${id}` }, title, sessionIds: [],
     createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
   }
 }
@@ -77,6 +77,13 @@ function occupancySource(initial = true) {
   }
 }
 
+/** Empty create-method occupancy: no extra methods registered in these tests. */
+const NO_CREATE_METHODS: readonly { id: string; label: string }[] = []
+const EMPTY_CREATE_METHODS = bindSnapshotSelector({
+  getSnapshot: () => NO_CREATE_METHODS,
+  subscribe: () => () => {},
+})
+
 function mount(
   items: readonly WorkspaceView[] = [workspace('alpha', 'Alpha')],
   createWorkspace = vi.fn(),
@@ -96,6 +103,7 @@ function mount(
       onClose={onClose}
       createWorkspace={createWorkspace}
       useDirectoryFlow={occupancy.useDirectoryFlow}
+      useCreateMethods={EMPTY_CREATE_METHODS}
       renderSlot={renderSlot}
       t={t}
     />
@@ -131,7 +139,7 @@ describe('WorkspacePicker', () => {
     expect(b.onClose).toHaveBeenCalled()
     expect(screen.getByTestId('directory-flow')).toBeTruthy()
     await act(async () => { b.probe.owner!.onPicked('/tmp/project') })
-    expect(createWorkspace).toHaveBeenCalledWith({ path: '/tmp/project' })
+    expect(createWorkspace).toHaveBeenCalledWith({ kind: 'local', path: '/tmp/project' })
     await waitFor(() => { expect(b.onPick).toHaveBeenCalledWith(created.workspaceId) })
     // Successful adoption withdraws the flow request.
     expect(screen.queryByTestId('directory-flow')).toBeNull()
@@ -212,7 +220,7 @@ describe('WorkspacePicker', () => {
       <WorkspacePicker
         open useSessions={hook(sessions)} useWorkspaces={hook(workspaceState([workspace('alpha', 'Alpha')]))}
         onPick={vi.fn()} onClose={vi.fn()} createWorkspace={vi.fn()}
-        useDirectoryFlow={occupancySource().useDirectoryFlow} renderSlot={renderSlot} t={t}
+        useDirectoryFlow={occupancySource().useDirectoryFlow} useCreateMethods={EMPTY_CREATE_METHODS} renderSlot={renderSlot} t={t}
       />,
     )
     expect(screen.queryByRole('menu')).toBeNull()
@@ -227,7 +235,7 @@ describe('WorkspacePicker', () => {
       <WorkspacePicker
         open anchorRef={anchor()} useSessions={hook(sessions)} useWorkspaces={hook(state)}
         onPick={vi.fn()} onClose={vi.fn()} createWorkspace={vi.fn()}
-        useDirectoryFlow={occupancySource().useDirectoryFlow} renderSlot={renderSlot} t={t}
+        useDirectoryFlow={occupancySource().useDirectoryFlow} useCreateMethods={EMPTY_CREATE_METHODS} renderSlot={renderSlot} t={t}
       />,
     )
     // An empty list is not final yet: jumping into the directory flow here

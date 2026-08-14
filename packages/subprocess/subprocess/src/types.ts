@@ -8,6 +8,7 @@
  */
 
 import type { Readable, Writable } from 'node:stream'
+import type { ExecutionLocation } from '@deepseek-ai/dsh-execution-location'
 
 /** Namespace prefix reserved for DeepSeek Harness-managed child environment facts. */
 export const DSH_ENV_PREFIX = 'DSH_' as const
@@ -77,6 +78,14 @@ export interface SubprocessSpawnSpec {
   argv: readonly string[]
   /** Working directory for the child. */
   cwd: string
+  /**
+   * The execution world the child belongs to, when the caller routes through
+   * the execution-world registry. The routing layer selects the backend; a
+   * backend validates that the world is its own and interprets `cwd` (and
+   * executable paths) in its world syntax. Omitting it keeps the backend's
+   * default world (local).
+   */
+  world?: ExecutionLocation | undefined
   /** Per-stream stdio dispositions. */
   stdio: SubprocessStdio
   /**
@@ -206,6 +215,11 @@ export interface SubprocessTerminalSpawnSpec {
   argv: readonly string[]
   /** Working directory in this subprocess provider's execution world. */
   cwd: string
+  /**
+   * The execution world the terminal belongs to, when the caller routes
+   * through the execution-world registry (see {@link SubprocessSpawnSpec.world}).
+   */
+  world?: ExecutionLocation | undefined
   /** Explicit environment layered after the provider's ambient scrub. */
   env?: Record<string, string> | undefined
   /** Initial terminal row count. */

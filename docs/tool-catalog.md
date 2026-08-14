@@ -32,6 +32,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-ralph` | `ralph` | `ctx.tools`, `ctx.workflowEngine`, `ctx.subagents`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents every fresh round)` | `tool/call`, `tool/result`, `workflow and child session events during execution` | - | A fixed foreground workflow starts one fresh structured child per round; the model selects only the immutable objective and an optional round cap. |
 | `@deepseek-ai/dsh-tool-skill` | `skill` | `ctx.tools`, `ctx.agents`, `ctx.skills` | `tool/call`, `tool/result`, `user/message replacement catalogs via agent.inject()` | - | - |
 | `@deepseek-ai/dsh-tool-session-query` | `session_event_read`, `session_event_search`, `session_event_trace`, `session_search`, `session_trace` | `ctx.tools`, `ctx.systemPrompt`, `ctx.sessionQuery`, `a calling Agent for workspace authority` | `tool/call`, `tool/result` | - | The five read-only tools hide provider cursors and authorize every result from the immutable calling agent session. The package is opt-in; compositions that need enforced deadlines or bounded inline output also mount the generic timeout or spill policies. |
+| `@deepseek-ai/dsh-tool-ssh` | `ssh_exec` | `ctx.tools`, `ctx.shell`, `ctx.ssh` | `tool/call`, `tool/result` | - | ssh_exec runs an explicit command through the local shell-owned OpenSSH client; ssh_connections manages saved connection metadata and an optional current-workspace default. SSH workspaces route ordinary filesystem and subprocess work through their execution world instead. |
 | `@deepseek-ai/dsh-tool-subagent` | `subagent` | `ctx.tools`, `ctx.subagents`, `ctx.systemPrompt` | `tool/call`, `tool/result`, `child session events through the chosen provider` | `subagent`, `subagent_fork` | The registered tool name is the load-time `toolName` config (default `subagent`); the schema above is that default. The shipped compositions load this package once per subagent backend, so the model additionally sees `subagent_fork` bound to the fork backend. Each instance's description, `run_in_background` parameter, and system-prompt policy follow its own `backgroundMode` and `enableRunInBackground`, so the two shipped schemas are not identical: `subagent` is `continuable` and defaults omitted calls to background with automatic settlement delivery, while `subagent_fork` stays `one-shot` and defaults them to foreground — see `packages/bundle/base/cordis.patch.yml` and `examples/acp-agent/cordis.yml`. |
 | `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`, `list_agents`, `send_message` | `ctx.tools`, `ctx.subagents`, `ctx.agents and ctx.sessionProjections (list_agents only)` | `tool/call`, `tool/result`, `child session events through ctx.subagents` | - | The globally named control tools over continuable background subagents: provider-bound `tool-subagent` instances register distinct delegation tools, while this package registers `send_message` and `interrupt_agent` once, plus `list_agents` from its separately loaded `/list-agents` plugin (whose catalog rows use the sessionProjections and live Agent registries). |
 | `@deepseek-ai/dsh-tool-subagent-report` | `report` | `ctx.subagents`, `ctx.systemPrompt`, `a live continuable in-process child Agent` | `tool/call`, `tool/result`, `a user-role message in the direct parent session` | - | Registered per continuable in-process child rather than globally, so this schema is visible only inside such a child and survives its global `toolFilter`. The same contribution installs the child-scoped `tool:report` prompt section, which this catalog does not render. The parent-facing `send_message` tool is installed independently. |
@@ -1467,6 +1468,54 @@ Read the authorized session lineage around one session, including complete visib
 Source: [`packages/session-query/tool-session-query/src/index.ts`](../packages/session-query/tool-session-query/src/index.ts)
 
 The five read-only tools hide provider cursors and authorize every result from the immutable calling agent session. The package is opt-in; compositions that need enforced deadlines or bounded inline output also mount the generic timeout or spill policies.
+
+<a id="deepseek-aidsh-tool-ssh"></a>
+
+## `@deepseek-ai/dsh-tool-ssh`
+
+### `ssh_exec`
+
+Connect to a remote Linux server over SSH and run a command, returning exit code, stdout, and stderr. Key-based authentication only (BatchMode=yes, so no password or passphrase prompts; a missing or unauthorized key fails fast instead of hanging). `host` is [user@]host or ANY alias defined in the local ~/.ssh/config — ssh resolves the alias itself, so no ssh_connections save is needed for config hosts. `command` is the bash script to run on the remote host (sent to `bash -s` via stdin). Omit `host` to use `connection` (a saved connection) or the current workspace's default connection. Omit `key_path` to use ssh default keys (~/.ssh) and ssh-agent.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "host": {
+      "type": "string",
+      "description": "Remote host as [user@]host, e.g. \"root@10.0.0.5\" or \"ubuntu@example.com\", or an alias from ~/.ssh/config. May be omitted when `connection` or a workspace default resolves it."
+    },
+    "command": {
+      "type": "string",
+      "description": "Bash command(s) to run on the remote Linux host."
+    },
+    "port": {
+      "type": "integer",
+      "description": "SSH port. Default 22."
+    },
+    "key_path": {
+      "type": "string",
+      "description": "Absolute path to the SSH private key file. Omit to use ssh default keys and ssh-agent."
+    },
+    "timeout_ms": {
+      "type": "number",
+      "description": "Foreground timeout in milliseconds. Default 30000."
+    },
+    "connection": {
+      "type": "string",
+      "description": "Label or id of a saved ssh connection (see ssh_connections); its host/port/user/keyPath fill in the gaps. Explicit `host`/`port`/`key_path` win."
+    }
+  },
+  "required": [
+    "host",
+    "command"
+  ]
+}
+```
+
+Source: [`packages/ssh/tool-ssh/src/index.ts`](../packages/ssh/tool-ssh/src/index.ts)
+
+ssh_exec runs an explicit command through the local shell-owned OpenSSH client; ssh_connections manages saved connection metadata and an optional current-workspace default. SSH workspaces route ordinary filesystem and subprocess work through their execution world instead.
 
 <a id="deepseek-aidsh-tool-subagent"></a>
 

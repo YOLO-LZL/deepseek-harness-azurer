@@ -32,6 +32,8 @@
   ],
   "license": "MIT",
   "peerDependencies": {
+    "@deepseek-ai/dsh-execution-location": "workspace:^",
+    "@deepseek-ai/dsh-execution-world": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-lsp": "workspace:^",
@@ -44,6 +46,8 @@
     "@deepseek-ai/schemastery": "workspace:^"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-execution-location": "workspace:^",
+    "@deepseek-ai/dsh-execution-world": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-fs-local": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",

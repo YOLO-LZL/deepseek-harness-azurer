@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"sdk-snapshot-bash","createdAt":1785097395899,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"sdk-snapshot-bash","createdAt":1785097395899,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498589606,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Run this exact command with your bash tool, then reply with its stdout only: echo dsh-sdk-proof-7391"}],"source":{"kind":"user"},"role":"user","id":"8ef0b6e2-40ab-430b-b4df-6514323c7270"}]}}
 {"type":"turn/start","seq":1,"time":1785821460035,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821460035,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

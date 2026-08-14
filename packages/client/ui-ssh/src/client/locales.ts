@@ -1,0 +1,123 @@
+/**
+ * Locale dictionaries for the built-in SSH settings section and the SSH
+ * workspace create method.
+ */
+
+export const NS = 'ssh-connections'
+
+/** Chinese strings for the SSH settings and workspace-create UI. */
+export const zh = {
+  nav: 'SSH 连接',
+  title: 'SSH 连接',
+  description: '管理 ssh_exec 与 SSH 远程工作区使用的持久化连接。模型可通过 ssh_connections 工具管理同一命名空间。',
+  connectionLabel: '名称',
+  host: '主机',
+  port: '端口',
+  user: '用户',
+  keyPath: '密钥路径',
+  add: '添加连接',
+  remove: '删除',
+  save: '保存',
+  saving: '保存中…',
+  discard: '放弃修改',
+  unsaved: '未保存',
+  collapse: '收起',
+  expand: '展开',
+  readOnly: '当前部署的设置只读。',
+  empty: '暂无连接。',
+  invalidLabel: '名称不能为空。',
+  invalidHost: '主机不能为空。',
+  invalidPort: '端口必须是 1–65535 之间的整数。',
+  duplicateLabel: '已存在同名连接。',
+  saveFailed: '保存失败。',
+  'method.ssh': 'SSH',
+  'method.connection': '连接',
+  'method.connectionPlaceholder': '选择已保存的连接',
+  'method.configAlias': '~/.ssh/config 别名',
+  'method.path': '远端路径',
+  'method.pathPlaceholder': '例如 /home/user/workspace',
+  'method.browse': '浏览',
+  'method.newFolder': '新建文件夹',
+  'method.newFolderPlaceholder': '文件夹名称',
+  'method.probe': '探测',
+  'method.probing': '探测中…',
+  'method.create': '创建 SSH 工作区',
+  'method.creating': '创建中…',
+  'method.cancel': '取消',
+  'method.noConnections': '还没有保存的 SSH 连接。请先在“设置 → SSH 连接”中添加。',
+  'method.sshUnavailable': '系统未检测到 ssh 客户端，SSH 工作区暂不可用。',
+  'method.openSettings': '打开 SSH 连接设置',
+  'method.emptyDir': '（空目录）',
+  'method.probeOk': '可用',
+  'method.probeMissing': '目录不存在',
+  'method.probeUnreachable': '无法连接',
+  'method.probeInvalid': '无效路径',
+  'method.breadcrumbHome': '家目录',
+  'method.listFailed': '无法读取远程目录',
+  'method.createFolderFailed': '无法创建远程文件夹',
+  'method.pathRequired': '请输入远端路径',
+  'method.connectionRequired': '请选择连接',
+} as const
+
+/** English strings with the same keys as {@link zh}. */
+export const en: Record<keyof typeof zh, string> = {
+  nav: 'SSH Connections',
+  title: 'SSH Connections',
+  description: 'Persisted connections used by ssh_exec and SSH remote workspaces. The model manages the same namespace through the ssh_connections tool.',
+  connectionLabel: 'Label',
+  host: 'Host',
+  port: 'Port',
+  user: 'User',
+  keyPath: 'Key path',
+  add: 'Add connection',
+  remove: 'Remove',
+  save: 'Save',
+  saving: 'Saving…',
+  discard: 'Discard',
+  unsaved: 'Unsaved',
+  collapse: 'Collapse',
+  expand: 'Expand',
+  readOnly: 'Settings are read-only in this deployment.',
+  empty: 'No connections yet.',
+  invalidLabel: 'Label must not be empty.',
+  invalidHost: 'Host must not be empty.',
+  invalidPort: 'Port must be an integer between 1 and 65535.',
+  duplicateLabel: 'A connection with this label already exists.',
+  saveFailed: 'Failed to save.',
+  'method.ssh': 'SSH',
+  'method.connection': 'Connection',
+  'method.connectionPlaceholder': 'Choose a saved connection',
+  'method.configAlias': '~/.ssh/config alias',
+  'method.path': 'Remote path',
+  'method.pathPlaceholder': 'e.g. /home/user/workspace',
+  'method.browse': 'Browse',
+  'method.newFolder': 'New folder',
+  'method.newFolderPlaceholder': 'Folder name',
+  'method.probe': 'Probe',
+  'method.probing': 'Probing…',
+  'method.create': 'Create SSH workspace',
+  'method.creating': 'Creating…',
+  'method.cancel': 'Cancel',
+  'method.noConnections': 'No saved SSH connections yet. Add one under Settings → SSH Connections.',
+  'method.sshUnavailable': 'No usable ssh client was detected; SSH workspaces are unavailable.',
+  'method.openSettings': 'Open SSH Connections settings',
+  'method.emptyDir': '(empty directory)',
+  'method.probeOk': 'Available',
+  'method.probeMissing': 'Directory does not exist',
+  'method.probeUnreachable': 'Cannot connect',
+  'method.probeInvalid': 'Invalid path',
+  'method.breadcrumbHome': 'Home',
+  'method.listFailed': 'Cannot read the remote directory',
+  'method.createFolderFailed': 'Cannot create the remote folder',
+  'method.pathRequired': 'Enter a remote path',
+  'method.connectionRequired': 'Choose a connection',
+}
+
+/** Translation keys used by the SSH settings and workspace-create UI. */
+export type SshConnectionsLocaleKey = keyof typeof zh
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    'ssh-connections': SshConnectionsLocaleKey
+  }
+}

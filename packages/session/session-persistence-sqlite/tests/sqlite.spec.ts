@@ -164,7 +164,7 @@ describe('rowToMeta', () => {
   it('restores optional origin metadata', () => {
     expect(rowToMeta({
       id: 'with-origin',
-      version: 0,
+      version: 1,
       created_at: 1,
       cwd: null,
       parent_session: null,
@@ -180,7 +180,7 @@ describe('rowToMeta', () => {
   it('rejects fractional stored creation metadata', () => {
     expect(() => rowToMeta({
       id: 'fractional',
-      version: 0,
+      version: 1,
       created_at: 1.5,
       cwd: null,
       parent_session: null,
@@ -198,7 +198,7 @@ describe('rowToMeta', () => {
     // dropped it would rebuild a composition the stored history contradicts.
     expect(rowToMeta({
       id: 'composed',
-      version: 0,
+      version: 1,
       created_at: 1,
       cwd: null,
       parent_session: null,

@@ -298,10 +298,13 @@ Abstract filesystem provider. Targets must preserve identity across aliases; rea
  * async even though the local backend only normalizes + realpaths.
  *
  * @param path - the path to resolve; relative paths resolve against `opts.cwd`.
- * @param opts - optional cwd override and cancellation signal.
+ * @param opts - optional cwd override, the execution world the path belongs
+ *   to (the routing layer selects the backend; a backend validates that the
+ *   world is its own and interprets paths in its world syntax), and
+ *   cancellation signal. Omitting `world` keeps the backend's default world.
  * @returns the stable target; the same file yields the same `targetKey`.
  */
-abstract resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget>
+abstract resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal; world?: ExecutionLocation }): Promise<FsTarget>
 
 /**
  * Return the canonical absolute path a subprocess in this filesystem's
@@ -346,14 +349,15 @@ abstract stat(target: FsTarget, signal?: AbortSignal): Promise<FsInfo | undefine
  * normal reads/writes, while `lstat` lets a consumer reject the path itself
  * before that follow happens.
  *
- * `opts.cwd` follows {@link resolve}'s cwd rules. `undefined` means the path is
- * absent.
+ * `opts.cwd` follows {@link resolve}'s cwd rules; `opts.world` follows its
+ * world rules. `undefined` means the path is absent.
  * @param path - the path to inspect; relative paths resolve against `opts.cwd`.
- * @param opts - `cwd` overrides the backend's default base for relative paths.
+ * @param opts - `cwd` overrides the backend's default base for relative paths;
+ *   `world` names the execution world the path belongs to.
  * @param signal - aborts the metadata round-trip.
  * @returns metadata only, never content; undefined for an absent path.
  */
-abstract lstat(path: string, opts?: { cwd?: string }, signal?: AbortSignal): Promise<FsPathInfo | undefined>
+abstract lstat(path: string, opts?: { cwd?: string; world?: ExecutionLocation }, signal?: AbortSignal): Promise<FsPathInfo | undefined>
 
 /**
  * Read the whole regular text file as a single decoded string.
@@ -425,9 +429,9 @@ abstract writeText( target: FsTarget, content: string, expected?: FsWriteIntent,
 abstract editText( target: FsTarget, edit: FsEditRequest, expected?: { version: FsVersion }, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsEditOutcome>
 ```
 
-Types: [SandboxExecutionPolicy](sandbox.md)
+Types: [ExecutionLocation](workspace.md) · [SandboxExecutionPolicy](sandbox.md)
 
-Source: [`packages/fs/fs/src/index.ts:86`](../../packages/fs/fs/src/index.ts)
+Source: [`packages/fs/fs/src/index.ts:87`](../../packages/fs/fs/src/index.ts)
 
 <a id="fs-events"></a>
 
@@ -450,7 +454,7 @@ Single-slot decision for the next FileSystem.editText. Calling `next()` yields a
 'fs/edit-intent'(target: FsTarget, actor: object | undefined, next: () => { version: FsVersion } | undefined | Promise<{ version: FsVersion } | undefined>): Promise<{ version: FsVersion } | undefined>
 ```
 
-Source: [`packages/fs/fs/src/index.ts:66`](../../packages/fs/fs/src/index.ts)
+Source: [`packages/fs/fs/src/index.ts:67`](../../packages/fs/fs/src/index.ts)
 
 <a id="fsobserved--emit"></a>
 
@@ -471,7 +475,7 @@ Record an authoritative positive or negative observation. Listeners must be sync
 'fs/observed'(target: FsTarget, observation: FsObservation, actor: object | undefined): void
 ```
 
-Source: [`packages/fs/fs/src/index.ts:76`](../../packages/fs/fs/src/index.ts)
+Source: [`packages/fs/fs/src/index.ts:77`](../../packages/fs/fs/src/index.ts)
 
 <a id="fswrite-intent--waterfall"></a>
 
@@ -491,5 +495,5 @@ Single-slot decision for the next FileSystem.writeText. Calling `next()` yields 
 'fs/write-intent'(target: FsTarget, actor: object | undefined, next: () => FsWriteIntent | undefined | Promise<FsWriteIntent | undefined>): Promise<FsWriteIntent | undefined>
 ```
 
-Source: [`packages/fs/fs/src/index.ts:58`](../../packages/fs/fs/src/index.ts)
+Source: [`packages/fs/fs/src/index.ts:59`](../../packages/fs/fs/src/index.ts)
 <!-- END GENERATED cordis-surface -->

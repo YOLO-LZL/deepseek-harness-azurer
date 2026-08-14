@@ -563,14 +563,61 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'executionWorlds',
+    summary: 'The execution-world registry: one registered provider per stable id, effect-scoped registration, duplicate-id rejection, and location routing.',
+    description: 'The execution-world registry: one registered provider per stable id, effect-scoped registration, duplicate-id rejection, and location routing.',
+    methods: [
+      {
+        signature: 'register(provider: ExecutionWorldProvider): () => void',
+        description: 'Register one execution-world provider. Registration is effect-scoped: the returned disposer (and the enclosing cordis effect scope) removes the provider and every route to it.',
+        parameters: [{ name: 'provider', description: 'the provider to register; its id must be unique.' }],
+        returns: 'the disposer unregistering this provider (idempotent).',
+        throws: ['a plain `Error` when the id is empty or already registered.'],
+      },
+      {
+        signature: 'provider(id: string): ExecutionWorldProvider | undefined',
+        description: 'Look up one registered provider.',
+        parameters: [{ name: 'id', description: 'provider id.' }],
+        returns: 'the provider, or `undefined` when unknown.',
+      },
+      {
+        signature: 'listProviders(): ExecutionWorldProvider[]',
+        description: 'The registered providers in registration order — the capability status surface for Host APIs and the UI.',
+        parameters: [],
+        returns: 'a fresh array of providers.',
+      },
+      {
+        signature: 'resolve(location?: ExecutionLocation): ResolvedExecutionWorld',
+        description: 'Resolve a location to its live backends. The location must name a registered provider; the provider interprets its own target and path syntax.',
+        parameters: [{ name: 'location', description: 'the location to resolve; `undefined` routes to the built-in `local` provider\'s default location.' }],
+        returns: 'the resolved world with its backends.',
+        throws: ['{@link ExecutionError} with `execution-provider-not-found` when the provider is unknown or the local default is not registered.'],
+      },
+      {
+        signature: 'workspace(location?: ExecutionLocation): WorkspaceProviderOperations',
+        description: 'Resolve the workspace-provider operations for one location.',
+        parameters: [{ name: 'location', description: 'the location to resolve; `undefined` routes to local.' }],
+        returns: 'the workspace operations.',
+        throws: ['{@link ExecutionError} with `execution-provider-not-found` when the provider is unknown, and `execution-unavailable` when the provider registers no workspace capability.'],
+      },
+      {
+        signature: 'workspaceOf(providerId: string): WorkspaceProviderOperations',
+        description: 'Resolve the workspace-provider operations of one named provider, without a location — the create-input path, where the location does not exist yet.',
+        parameters: [{ name: 'providerId', description: 'provider id.' }],
+        returns: 'the workspace operations.',
+        throws: ['{@link ExecutionError} with `execution-provider-not-found` when the provider is unknown, and `execution-unavailable` when the provider registers no workspace capability.'],
+      },
+    ],
+  },
+  {
     key: 'fs',
     summary: 'Abstract filesystem provider.',
     description: 'Abstract filesystem provider. Targets must preserve identity across aliases; reads expose regular UTF-8 text or typed errors, listings are stable and content-free, and mutations are atomic. Optional guards add stale protection without changing the unguarded provider contract.',
     methods: [
       {
-        signature: 'abstract resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget>',
+        signature: 'abstract resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal; world?: ExecutionLocation }): Promise<FsTarget>',
         description: 'Resolve a model/plugin-supplied path into a stable FsTarget. May perform I/O (a remote/sandboxed backend may need a round-trip to map a path to a stable identity), hence async even though the local backend only normalizes + realpaths.',
-        parameters: [{ name: 'path', description: 'the path to resolve; relative paths resolve against `opts.cwd`.' }, { name: 'opts', description: 'optional cwd override and cancellation signal.' }],
+        parameters: [{ name: 'path', description: 'the path to resolve; relative paths resolve against `opts.cwd`.' }, { name: 'opts', description: 'optional cwd override, the execution world the path belongs to (the routing layer selects the backend; a backend validates that the world is its own and interprets paths in its world syntax), and cancellation signal. Omitting `world` keeps the backend\'s default world.' }],
         returns: 'the stable target; the same file yields the same `targetKey`.',
       },
       {
@@ -598,9 +645,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'metadata only, never content; undefined for an absent target.',
       },
       {
-        signature: 'abstract lstat(path: string, opts?: { cwd?: string }, signal?: AbortSignal): Promise<FsPathInfo | undefined>',
-        description: 'Return path metadata without following the final path component when it is a symbolic link. This is intentionally path-shaped, not target-shaped: resolve follows symlinks to produce the stable identity used by normal reads/writes, while `lstat` lets a consumer reject the path itself before that follow happens.\n\n`opts.cwd` follows resolve\'s cwd rules. `undefined` means the path is absent.',
-        parameters: [{ name: 'path', description: 'the path to inspect; relative paths resolve against `opts.cwd`.' }, { name: 'opts', description: '`cwd` overrides the backend\'s default base for relative paths.' }, { name: 'signal', description: 'aborts the metadata round-trip.' }],
+        signature: 'abstract lstat(path: string, opts?: { cwd?: string; world?: ExecutionLocation }, signal?: AbortSignal): Promise<FsPathInfo | undefined>',
+        description: 'Return path metadata without following the final path component when it is a symbolic link. This is intentionally path-shaped, not target-shaped: resolve follows symlinks to produce the stable identity used by normal reads/writes, while `lstat` lets a consumer reject the path itself before that follow happens.\n\n`opts.cwd` follows resolve\'s cwd rules; `opts.world` follows its world rules. `undefined` means the path is absent.',
+        parameters: [{ name: 'path', description: 'the path to inspect; relative paths resolve against `opts.cwd`.' }, { name: 'opts', description: '`cwd` overrides the backend\'s default base for relative paths; `world` names the execution world the path belongs to.' }, { name: 'signal', description: 'aborts the metadata round-trip.' }],
         returns: 'metadata only, never content; undefined for an absent path.',
       },
       {
@@ -1040,25 +1087,25 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async prepare(id: SessionId, signal?: AbortSignal): Promise<SessionPreparation>',
-        description: 'Prepare the exact unpublished Session used by resume. Implementations may reuse object graphs retained by an earlier inspect after confirming their durable revision is still current; disposal releases an unpublished reservation. Revision retries require the durable log to remain unchanged for one read/check round trip; continuous external writers may delay completion.',
+        description: 'Prepare the exact unpublished Session used by resume. Implementations may reuse object graphs retained by an earlier inspect after confirming their durable revision is still current; disposal releases an unpublished reservation. A v0 artifact is available only through detached history reads because it records no execution location; preparation rejects it. Revision retries require the durable log to remain unchanged for one read/check round trip; continuous external writers may delay completion.',
         parameters: [{ name: 'id', description: 'persisted session to prepare.' }, { name: 'signal', description: 'optional cancellation for preparation work.' }],
         returns: 'one owned unpublished Session preparation.',
       },
       {
         signature: 'abstract load(id: SessionId): Promise<SessionInspection>',
-        description: 'Load an immutable balanced logical view and commit any required cold recovery. A complete interrupted final turn is preserved and durably closed with missing tool errors plus any open step and turn boundaries; only a torn final record is discarded. Unknown versions and corruption in the committed prefix reject. Implementations MUST NOT crash-repair an identity still bound to a live Session: a balanced live log may return as a durable snapshot, while an open live turn rejects. Returned values may be shared with immutable live or prepared state and must not be mutated. Revision-based implementations may wait for one stable read/check round trip.',
+        description: 'Load an immutable balanced logical view and commit any required cold recovery. A complete interrupted final turn is preserved and durably closed with missing tool errors plus any open step and turn boundaries; only a torn final record is discarded. A v0 artifact is history-only and rejects here because it cannot safely seed an execution. Other unsupported versions and corruption in the committed prefix also reject. Implementations MUST NOT crash-repair an identity still bound to a live Session: a balanced live log may return as a durable snapshot, while an open live turn rejects. Returned values may be shared with immutable live or prepared state and must not be mutated. Revision-based implementations may wait for one stable read/check round trip.',
         parameters: [{ name: 'id', description: 'the persisted session to reload.' }],
         returns: 'the header and a log ending on a balanced `turn/end`.',
       },
       {
         signature: 'abstract inspect(id: SessionId, signal?: AbortSignal): Promise<SessionInspection>',
-        description: 'Inspect an immutable logical session without committing recovery or publishing it. A cold complete interrupted turn receives synthetic closers in memory and a torn physical tail remains untouched. An already-live Session instead yields its current immutable snapshot, which may contain an open turn and its `session/end-seed` boundary. Coordinator-backed implementations retain the exact cold unpublished Session for bounded reuse by a later prepare. A stale ready source is reloaded; a source already committing or reserved for resume remains exclusive, and inspection may borrow its immutable view. Callers borrow only the immutable header and log. Continuous external writers may delay revision convergence.',
+        description: 'Inspect an immutable logical session without committing recovery or publishing it. A cold complete interrupted turn receives synthetic closers in memory and a torn physical tail remains untouched. An already-live Session instead yields its current immutable snapshot, which may contain an open turn and its `session/end-seed` boundary. Inspection maps a v0 header to an in-memory current-format view for history without changing storage; prepare and load still reject that source. Coordinator-backed implementations retain the exact cold unpublished Session for bounded reuse by a later prepare. A stale ready source is reloaded; a source already committing or reserved for resume remains exclusive, and inspection may borrow its immutable view. Callers borrow only the immutable header and log. Continuous external writers may delay revision convergence.',
         parameters: [{ name: 'id', description: 'the persisted session to inspect.' }, { name: 'signal', description: 'optional cancellation for queued and backend read work.' }],
         returns: 'the validated header and current logical event log.',
       },
       {
         signature: 'abstract readFrom(id: SessionId, fromSeq: number, signal?: AbortSignal): Promise<{ meta: SessionHeader; events: SessionEvent[] }>',
-        description: 'Read the stored events from `fromSeq` onward — the read-from-seq primitive for read models that resume from a watermark (e.g. a persisted projection cache folding only the tail past its checkpoint). Unlike inspect, it is a detached physical suffix read: no preparation cache, torn-tail truncation, synthetic closers, or coordinator-state publication. Only events from the valid contiguous stored prefix are returned, so a torn fragment never reaches the caller. `fromSeq` at or beyond the stored prefix returns an empty event list (never an error). Backends whose medium can seek by seq (SQLite) read only the suffix; sequential media (JSONL, both encodings) still parse the whole artifact and skip forward — the primitive bounds what is RETURNED and refolded, not every backend\'s physical read.',
+        description: 'Read the stored events from `fromSeq` onward — the read-from-seq primitive for read models that resume from a watermark (e.g. a persisted projection cache folding only the tail past its checkpoint). Unlike inspect, it is a detached physical suffix read: no preparation cache, torn-tail truncation, synthetic closers, or coordinator-state publication. Only events from the valid contiguous stored prefix are returned, so a torn fragment never reaches the caller. `fromSeq` at or beyond the stored prefix returns an empty event list (never an error). A v0 header maps to an in-memory current-format history view without changing storage; it remains unavailable to prepare and load. Backends whose medium can seek by seq (SQLite) read only the suffix; sequential media (JSONL, both encodings) still parse the whole artifact and skip forward — the primitive bounds what is RETURNED and refolded, not every backend\'s physical read.',
         parameters: [{ name: 'id', description: 'the persisted session to read.' }, { name: 'fromSeq', description: 'first event seq to include; a non-negative safe integer.' }, { name: 'signal', description: 'optional cancellation for queued and backend read work.' }],
         returns: 'the header and the stored events with `seq >= fromSeq`.',
       },
@@ -1535,6 +1582,95 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'ssh',
+    summary: 'The SSH runtime: connection registry over the `ssh-connections` settings namespace (with legacy migration), read-only ~/.ssh/config aliases, and per-connection transport instances.',
+    description: 'The SSH runtime: connection registry over the `ssh-connections` settings namespace (with legacy migration), read-only ~/.ssh/config aliases, and per-connection transport instances.',
+    methods: [
+      {
+        signature: 'readonly config: ResolvedSshConfig',
+        description: 'Resolved SSH runtime settings used by transports and tools.',
+        parameters: [],
+      },
+      {
+        signature: 'connectionsScope(): SettingsScope<SshConnectionsSettings> | undefined',
+        description: 'The mounted settings scope, when a settings service exists.',
+        parameters: [],
+        returns: 'the writable scope, or `undefined` without settings.',
+      },
+      {
+        signature: 'connectionsSettings(): SshConnectionsSettings',
+        description: 'The resolved connections settings value (mounted scope or memory).',
+        parameters: [],
+        returns: 'the current connection settings.',
+      },
+      {
+        signature: 'sshAvailable(): Promise<boolean>',
+        description: 'Probe for a usable system ssh client. Cached; never throws.',
+        parameters: [],
+        returns: 'true when `ssh` is on PATH and starts.',
+      },
+      {
+        signature: 'listConnections(): SshConnection[]',
+        description: 'All saved connections in save order.',
+        parameters: [],
+        returns: 'the current connection records.',
+      },
+      {
+        signature: 'listConfigHosts(): Promise<SshConfigHost[]>',
+        description: 'Hosts discovered from ~/.ssh/config (read-only).',
+        parameters: [],
+        returns: 'discovered aliases and their resolved facts.',
+      },
+      {
+        signature: 'connection(idOrLabel: string): SshConnection | undefined',
+        description: 'Resolve a connection by id or label.',
+        parameters: [{ name: 'idOrLabel', description: 'stable connection id or display label.' }],
+        returns: 'the matching connection, or `undefined`.',
+      },
+      {
+        signature: 'workspaceDefault(workspaceId: string): string | undefined',
+        description: 'The workspace default connection id for one workspace, when bound.',
+        parameters: [{ name: 'workspaceId', description: 'stable workspace id.' }],
+        returns: 'the bound connection id, or `undefined`.',
+      },
+      {
+        signature: 'resolveReference(reference: SshTargetReference): SshTransportTarget',
+        description: 'Resolve a target reference into concrete transport facts.',
+        parameters: [{ name: 'reference', description: 'saved connection or OpenSSH config alias reference.' }],
+        returns: 'host, port, key, and timeout values for a transport.',
+      },
+      {
+        signature: 'referenceOf(location: ExecutionLocation, operation: string = \'resolve\'): SshTargetReference',
+        description: 'Resolve the SSH target reference carried by one execution location.',
+        parameters: [{ name: 'location', description: 'SSH execution location to inspect.' }, { name: 'operation', description: 'caller name included in a provider mismatch error.' }],
+        returns: 'the validated saved-connection or config-alias reference.',
+      },
+      {
+        signature: 'labelOf(reference: SshTargetReference): string | undefined',
+        description: 'Display label of one location\'s reference, when resolvable.',
+        parameters: [{ name: 'reference', description: 'saved connection or config alias reference.' }],
+        returns: 'a user-facing label, or `undefined` for a missing connection.',
+      },
+      {
+        signature: 'transportFor(location: ExecutionLocation): SshTransport',
+        description: 'The transport for one execution location (per-reference instances are cached and closed at service disposal).',
+        parameters: [{ name: 'location', description: 'an ssh execution location.' }],
+        returns: 'the live transport; lazily connected.',
+      },
+      {
+        signature: 'invalidateTransport(reference: SshTargetReference): void',
+        description: 'Close and forget one connection\'s transport after a connection mutation.',
+        parameters: [{ name: 'reference', description: 'target whose cached transport must be released.' }],
+      },
+      {
+        signature: 'resolveExecTarget( args: { host?: string; connection?: string }, workspaceDefaultId: string | undefined, ): Promise<SshTarget>',
+        description: 'Resolve the effective target for ssh_exec-style calls: explicit host → explicit connection → workspace default.',
+        parameters: [{ name: 'args', description: 'model arguments.' }, { name: 'workspaceDefaultId', description: 'the calling workspace\'s default connection id.' }],
+        returns: 'the resolved target (host string form for ssh argv).',
+      },
+    ],
+  },
+  {
     key: 'storage',
     summary: 'The storage hub service.',
     description: 'The storage hub service. Backends register under `backend`; data forms mount under their `StorageForms` key and are reached as `ctx.storage.<form>`.',
@@ -1674,9 +1810,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Abstract subprocess service. Subclass, implement spawn, and load the subclass as a plugin — it registers as `ctx.subprocess` (one implementation per context; loading a second throws, which is cordis\' standard duplicate-service behavior).\n\nImplementations must honor these semantics:\n\n- Executable paths belong to one execution world shared with the mounted filesystem provider.\n- spawn returns immediately with a live handle; `done` resolves at process close with exit facts and rejects only for spawn-level failures.\n- Collect-mode readers are offset-based and non-consuming, so independent readers never consume one another\'s output; lossy reads report truncation and the spill file holding the complete stream when one exists. Piped streams are handed to the caller raw and never buffered here.\n- SubprocessHandle.terminate (and the spec\'s abort signal) escalates SIGTERM→grace→SIGKILL — the only termination verb — tree-scoped on every platform. SubprocessHandle.waitForExit observes whole-tree liveness, so a consumer-owned teardown ladder can hold each tier on real quiescence.\n- Disposal of the service terminates all still-running managed processes and awaits their exit.\n- spawnTerminal owns terminal allocation, text transport, foreground groups, signalling, and whole-session quiescence behind one awaited termination method; readiness and persistent-shell policy stay in the PTY consumer. Its output stream ends after queued terminal output when the top-level process exits.',
     methods: [
       {
-        signature: 'abstract resolveExecutable( command: string, env?: Readonly<Record<string, string>>, signal?: AbortSignal, ): Promise<string>',
+        signature: 'abstract resolveExecutable( command: string, env?: Readonly<Record<string, string>>, signal?: AbortSignal, world?: ExecutionLocation, ): Promise<string>',
         description: 'Resolve one configured executable in this provider\'s execution world. Absolute paths are verified; bare names use the provider\'s scrubbed PATH plus explicit environment overrides. Relative paths containing separators are rejected: the resolution base is undefined, so providers fail loud instead of guessing.',
-        parameters: [{ name: 'command', description: 'absolute executable path or bare PATH name.' }, { name: 'env', description: 'explicit environment entries used for lookup.' }, { name: 'signal', description: 'aborts remote or local lookup.' }],
+        parameters: [{ name: 'command', description: 'absolute executable path or bare PATH name.' }, { name: 'env', description: 'explicit environment entries used for lookup.' }, { name: 'signal', description: 'aborts remote or local lookup.' }, { name: 'world', description: 'the execution world the executable belongs to, when the caller routes through the registry; the backend validates the world is its own and resolves in its world syntax. Omitted keeps the backend\'s default world.' }],
         returns: 'a canonical executable path.',
       },
       {
@@ -2107,12 +2243,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'workspaceRegistry',
     summary: 'Durable workspace registry.',
-    description: 'Durable workspace registry. Startup waits for `sessionPersistence`, builds one canonical-cwd header index, and completes the one-time history bootstrap before the service becomes active. The persistence dependency is mandatory so an unavailable peer can never be mistaken for an empty history and commit the initialized marker.',
+    description: 'Durable workspace registry. Startup waits for `sessionPersistence`, builds one canonical-location header index, and completes the one-time history bootstrap before the service becomes active. The persistence dependency is mandatory so an unavailable peer can never be mistaken for an empty history and commit the initialized marker.\n\nThe registry delegates workspace-provider operations (canonicalize, validate/status, list, create, ensureSessionRoot, location resolution) to the execution-world registry when one is mounted; without it, local create/resolve fall back to this package\'s original realpath/stat path.',
     methods: [
       {
-        signature: 'async create(path: string, title?: string): Promise<Workspace>',
-        description: 'Create or reuse a workspace for an existing directory. The path is canonicalized through `fs.realpath`; a nonexistent path rejects with the original error and a non-directory rejects. Repeated calls for the same canonical path return the existing entity without changing its title. A newly created workspace is prepended to the durable registry order. Different canonical paths may share a display title.',
-        parameters: [{ name: 'path', description: 'Existing directory to own, in any path spelling.' }, { name: 'title', description: 'Display title used only when a new record is created.' }],
+        signature: 'async create(input: WorkspaceCreateInput, title?: string): Promise<Workspace>',
+        description: 'Create or reuse a workspace. The input names either a host directory (`kind: \'local\'`) or a target in a registered execution world (`kind: \'provider\'`); the owning workspace provider canonicalizes and validates the location. A nonexistent path rejects; repeated calls for the same canonical location return the existing entity without changing its title. A newly created workspace is prepended to the durable registry order. Different canonical locations may share a display title.',
+        parameters: [{ name: 'input', description: 'Discriminated create request (local path or provider target).' }, { name: 'title', description: 'Display title used only when a new record is created.' }],
         returns: 'the existing or newly durable workspace.',
       },
       {
@@ -2123,7 +2259,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'list(): Workspace[]',
-        description: 'Synchronous workspace projection in durable registry order. Every entity\'s `sessionIds` getter is already filtered by the startup/live canonical-cwd header index; this method performs no persistence reads.',
+        description: 'Synchronous workspace projection in durable registry order. Every entity\'s `sessionIds` getter is already filtered by the startup/live canonical-location header index; this method performs no persistence reads.',
         parameters: [],
         returns: 'a fresh ordered array of workspace entities.',
       },
@@ -2147,9 +2283,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async resolveByPath(path: string): Promise<Workspace | undefined>',
-        description: 'Resolve by canonical directory path without creating or mutating a workspace. A missing path rejects during `realpath`; an existing unowned directory returns `undefined`.',
+        description: 'Resolve by canonical directory path without creating or mutating a workspace. Only local workspaces are addressable by host path: the path is canonicalized through the local provider (or this package\'s fallback) and matched against local records.',
         parameters: [{ name: 'path', description: 'Existing directory path in any spelling.' }],
         returns: 'the workspace owning the canonical path, when one exists.',
+      },
+      {
+        signature: 'resolveByLocation(location: ExecutionLocation): Workspace | undefined',
+        description: 'Resolve by execution location without creating or mutating a workspace. Remote (SSH) workspaces are only addressable this way — their directories are not host paths. The location must match a record canonically.',
+        parameters: [{ name: 'location', description: 'the execution location to match.' }],
+        returns: 'the workspace owning the location, when one exists.',
       },
     ],
   },
@@ -2348,6 +2490,22 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'A domain record or the global singleton changed, emitted once per write strictly after the backend acknowledged durability.',
     description: 'A domain record or the global singleton changed, emitted once per write strictly after the backend acknowledged durability. Events of one domain arrive in its write-chain order.',
     parameters: [{ name: 'change', description: 'domain, table (`\'\'` for global), key (`\'\'` for global), operation discriminant, and on `put` the new snapshot.' }],
+  },
+  {
+    name: 'execution-worlds/registered',
+    mode: 'emit',
+    signature: '\'execution-worlds/registered\'(provider: ExecutionWorldProvider): void',
+    summary: 'A provider registered (or re-registered after disposal).',
+    description: 'A provider registered (or re-registered after disposal). Emitted with the provider object; UI capability status listens for this.',
+    parameters: [{ name: 'provider', description: 'the registered provider.' }],
+  },
+  {
+    name: 'execution-worlds/unregistered',
+    mode: 'emit',
+    signature: '\'execution-worlds/unregistered\'(id: string): void',
+    summary: 'A provider was unregistered and its routes disappeared.',
+    description: 'A provider was unregistered and its routes disappeared.',
+    parameters: [{ name: 'id', description: 'the removed provider id.' }],
   },
   {
     name: 'fs/edit-intent',
@@ -2911,7 +3069,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreateSessionOptions',
-    declaration: 'export interface CreateSessionOptions {\n    readonly seed?: readonly SessionEvent[];\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly createdAt?: number;\n        readonly seedLength?: number;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n}',
+    declaration: 'export interface CreateSessionOptions {\n    readonly seed?: readonly SessionEvent[];\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly executionLocation?: ExecutionLocation;\n        readonly parentSession?: SessionId;\n        readonly createdAt?: number;\n        readonly seedLength?: number;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n}',
   },
   {
     name: 'CredentialInfo',
@@ -3030,12 +3188,32 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface EpochHeader {\n    config: LlmCallConfig;\n    adapterDefaults?: LlmCallConfigAdapterDefaults;\n    system?: string;\n    tools?: ToolSchema[];\n}',
   },
   {
+    name: 'ExecutionCapabilities',
+    declaration: 'export interface ExecutionCapabilities {\n    readonly filesystem: boolean;\n    readonly subprocess: boolean;\n    readonly workspace: boolean;\n}',
+  },
+  {
+    name: 'ExecutionJsonValue',
+    declaration: 'export type ExecutionJsonValue = null | boolean | number | string | ExecutionJsonValue[] | {\n    [key: string]: ExecutionJsonValue;\n};',
+  },
+  {
+    name: 'ExecutionLocation',
+    declaration: 'export interface ExecutionLocation {\n    readonly providerId: string;\n    readonly target: ExecutionJsonValue;\n    readonly root: string;\n    readonly display?: {\n        readonly label?: string | undefined;\n        readonly host?: string | undefined;\n    } | undefined;\n}',
+  },
+  {
+    name: 'ExecutionWorldProvider',
+    declaration: 'export interface ExecutionWorldProvider {\n    readonly id: string;\n    readonly label: string;\n    readonly capabilities: ExecutionCapabilities;\n    resolve(location: ExecutionLocation): ResolvedExecutionWorld;\n    defaultLocation(): ExecutionLocation;\n    readonly workspace?: WorkspaceProviderOperations;\n}',
+  },
+  {
     name: 'FileDiff',
     declaration: 'export interface FileDiff {\n    path: string;\n    oldText: string | null;\n    newText: string;\n}',
   },
   {
     name: 'FileLocation',
     declaration: 'export interface FileLocation {\n    path: string;\n    line?: number;\n}',
+  },
+  {
+    name: 'FileSystem',
+    declaration: 'export abstract class FileSystem extends Service {\n    constructor(ctx: Context);\n    get sandboxMode(): SandboxMode | undefined;\n    abstract resolve(path: string, opts?: {\n        cwd?: string;\n        signal?: AbortSignal;\n        world?: ExecutionLocation;\n    }): Promise<FsTarget>;\n    abstract processPath(target: FsTarget): string;\n    abstract fileUrl(target: FsTarget): string;\n    abstract contains(parent: FsTarget, child: FsTarget): boolean;\n    abstract stat(target: FsTarget, signal?: AbortSignal): Promise<FsInfo | undefined>;\n    abstract lstat(path: string, opts?: {\n        cwd?: string;\n        world?: ExecutionLocation;\n    }, signal?: AbortSignal): Promise<FsPathInfo | undefined>;\n    abstract readText(target: FsTarget, signal?: AbortSignal): Promise<string>;\n    abstract streamText(target: FsTarget, signal?: AbortSignal): Promise<AsyncIterable<string>>;\n    abstract readBytes(target: FsTarget, signal: AbortSignal | undefined, maxBytes: number): Promise<Uint8Array>;\n    abstract listDir(target: FsTarget, signal?: AbortSignal): Promise<FsDirEntry[]>;\n    abstract writeText(target: FsTarget, content: string, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy): Promise<FsWriteOutcome>;\n    abstract editText(target: FsTarget, edit: FsEditRequest, expected?: {\n        version: FsVersion;\n    }, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy): Promise<FsEditOutcome>;\n}',
   },
   {
     name: 'FinishReason',
@@ -3347,7 +3525,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LspQueryRequest',
-    declaration: 'export interface LspQueryRequest {\n    readonly operation: LspOperation;\n    readonly filePath: string;\n    readonly position: LspPosition;\n    readonly workspaceRoot: string;\n}',
+    declaration: 'export interface LspQueryRequest {\n    readonly operation: LspOperation;\n    readonly filePath: string;\n    readonly position: LspPosition;\n    readonly workspaceRoot: string;\n    readonly executionLocation?: ExecutionLocation;\n}',
   },
   {
     name: 'LspQueryResult',
@@ -3602,6 +3780,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ResolvedCredential {\n    value: string;\n    source: string;\n}',
   },
   {
+    name: 'ResolvedExecutionWorld',
+    declaration: 'export interface ResolvedExecutionWorld {\n    readonly location: ExecutionLocation;\n    readonly filesystem?: FileSystem;\n    readonly subprocess?: SubprocessRuntime;\n}',
+  },
+  {
     name: 'ResolvedNormalRetryPolicy',
     declaration: 'export interface ResolvedNormalRetryPolicy extends ResolvedRetryBackoff {\n    readonly mode: \'normal\';\n    readonly maxRetries: number;\n    readonly retryableCodes: readonly string[];\n}',
   },
@@ -3635,7 +3817,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RpcErrorDetailsMap',
-    declaration: 'export interface RpcErrorDetailsMap {\n    \'bad-request\': {\n        issues: ZodIssue[];\n    };\n    \'cancelled\': {};\n    \'session-not-found\': {\n        sessionId: SessionId;\n    };\n    \'model-unavailable\': {\n        provider: string;\n        model: string;\n    };\n    \'session-conflict\': {\n        sessionId: SessionId;\n        requestedCwd: string;\n        existingCwd?: string;\n    };\n    \'invalid-time-zone\': {\n        value: string;\n    };\n    \'workspace-attach-failed\': {\n        sessionId: SessionId;\n        workspaceId: string;\n    };\n    \'workspace-not-found\': {\n        workspaceId: string;\n    };\n    \'workspace-invalid-path\': {\n        path: string;\n    };\n    \'workspace-name-conflict\': {\n        name: string;\n    };\n    \'workspace-move-invalid\': {\n        workspaceId: string;\n        sessionId: SessionId;\n        beforeSessionId?: SessionId;\n    };\n    \'directory-unreadable\': {\n        path: string;\n    };\n    \'directory-exists\': {\n        path: string;\n    };\n    \'directory-create-failed\': {\n        path: string;\n    };\n    \'directory-picker-unavailable\': {\n        capability: string;\n    };\n    \'agent-preset-read-only\': {\n        agentPreset: string;\n        reason: string;\n    };\n    \'agent-preset-locked\': {\n        sessionId: SessionId;\n        agentPreset: string;\n    };\n    \'agent-preset-conflict\': {\n        sessionId: SessionId;\n        requestedPreset: string;\n        existingPreset?: string;\n    };\n    \'agent-preset-not-found\': {\n        agentPreset: string;\n      /* …truncated — full shape in source */',
+    declaration: 'export interface RpcErrorDetailsMap {\n    \'bad-request\': {\n        issues: ZodIssue[];\n    };\n    \'cancelled\': {};\n    \'session-not-found\': {\n        sessionId: SessionId;\n    };\n    \'model-unavailable\': {\n        provider: string;\n        model: string;\n    };\n    \'session-conflict\': {\n        sessionId: SessionId;\n        requestedCwd: string;\n        existingCwd?: string;\n    };\n    \'invalid-time-zone\': {\n        value: string;\n    };\n    \'workspace-attach-failed\': {\n        sessionId: SessionId;\n        workspaceId: string;\n    };\n    \'workspace-not-found\': {\n        workspaceId: string;\n    };\n    \'workspace-invalid-path\': {\n        path: string;\n    };\n    \'workspace-provider-invalid-target\': {\n        path: string;\n    };\n    \'workspace-remote-path-invalid\': {\n        path: string;\n    };\n    \'execution-unavailable\': {\n        path: string;\n    };\n    \'execution-provider-not-found\': {\n        path: string;\n    };\n    \'workspace-name-conflict\': {\n        name: string;\n    };\n    \'workspace-move-invalid\': {\n        workspaceId: string;\n        sessionId: SessionId;\n        beforeSessionId?: SessionId;\n    };\n    \'directory-unreadable\': {\n        path: string;\n    };\n    \'directory-exists\': {\n        path: string;\n    };\n    \'directory-create-failed\': {\n        path: string;\n    };\n    \'directory-picker-unavailable\': {\n        capability: string;\n    };\n    \'agent-preset-read-only\': {\n        agentPreset: string;\n        reason: string;\n    };\n    \'agent-preset-locked\': { /* …truncated — full shape in source */',
   },
   {
     name: 'RpcId',
@@ -3795,7 +3977,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionHeader',
-    declaration: 'export interface SessionHeader {\n    readonly version: number;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly seedLength?: number;\n    readonly origin?: \'subagent\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
+    declaration: 'export interface SessionHeader {\n    readonly version: number;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly executionLocation?: ExecutionLocation;\n    readonly parentSession?: SessionId;\n    readonly seedLength?: number;\n    readonly origin?: \'subagent\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
   },
   {
     name: 'SessionId',
@@ -4078,6 +4260,38 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SpillSource {\n    toolName: string;\n    callId: CallId;\n    label: string;\n}',
   },
   {
+    name: 'SshChannel',
+    declaration: 'export interface SshChannel {\n    readonly stdin: NodeJS.WritableStream;\n    readonly stdout: NodeJS.ReadableStream;\n    readonly stderr: NodeJS.ReadableStream;\n    readonly exit: Promise<{\n        code: number | null;\n        signal: string | null;\n    }>;\n    close(): void;\n}',
+  },
+  {
+    name: 'SshConfigHost',
+    declaration: 'export interface SshConfigHost {\n    alias: string;\n    hostName: string;\n    user?: string;\n    port?: number;\n    identityFile?: string;\n}',
+  },
+  {
+    name: 'SshSpawner',
+    declaration: 'export type SshSpawner = (argv: readonly string[]) => SshChannel;',
+  },
+  {
+    name: 'SshTarget',
+    declaration: 'export interface SshTarget {\n    host: string;\n    port?: number;\n    user?: string;\n    keyPath?: string;\n    source: \'explicit\' | \'connection\' | \'workspace-default\';\n}',
+  },
+  {
+    name: 'SshTargetReference',
+    declaration: 'export type SshTargetReference = {\n    readonly kind: \'connection\';\n    readonly connectionId: string;\n} | {\n    readonly kind: \'config\';\n    readonly alias: string;\n};',
+  },
+  {
+    name: 'SshTransport',
+    declaration: 'export class SshTransport {\n    constructor(readonly options: SshTransportOptions);\n    openStdinFifoChannel(fifoPath: string): SshChannel;\n    openPtyChannel(argv: readonly string[], pidFile: string): SshChannel;\n    async installHelper(): Promise<void>;\n    async op(op: string, params: Record<string, unknown>, opts?: {\n        signal?: AbortSignal;\n        timeoutMs?: number;\n    }): Promise<Record<string, unknown>>;\n    async killInterrupted(stateDir: string, signal: \'TERM\' | \'KILL\'): Promise<void>;\n    close(): void;\n    static readonly protocolVersion;\n}',
+  },
+  {
+    name: 'SshTransportOptions',
+    declaration: 'export interface SshTransportOptions {\n    target: SshTransportTarget;\n    remoteStateDir: string;\n    spawner?: SshSpawner;\n    opTimeoutMs?: number;\n    onDiagnostics?: (line: string) => void;\n}',
+  },
+  {
+    name: 'SshTransportTarget',
+    declaration: 'export interface SshTransportTarget {\n    host: string;\n    port: number;\n    keyPath?: string;\n    connectTimeout: number;\n}',
+  },
+  {
     name: 'StorageBackend',
     declaration: 'export interface StorageBackend {\n    readonly kv?: KvFacet;\n    close(): Promise<void>;\n}',
   },
@@ -4190,8 +4404,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SubprocessOutputReader {\n    readFrom(fromByte: number): SubprocessOutputRead;\n}',
   },
   {
+    name: 'SubprocessRuntime',
+    declaration: 'export abstract class SubprocessRuntime extends Service {\n    constructor(ctx: Context);\n    abstract resolveExecutable(command: string, env?: Readonly<Record<string, string>>, signal?: AbortSignal, world?: ExecutionLocation): Promise<string>;\n    abstract spawn(spec: SubprocessSpawnSpec): SubprocessHandle;\n    abstract spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle>;\n}',
+  },
+  {
     name: 'SubprocessSpawnSpec',
-    declaration: 'export interface SubprocessSpawnSpec {\n    argv: readonly string[];\n    cwd: string;\n    stdio: SubprocessStdio;\n    graceMs: number;\n    signal?: AbortSignal | undefined;\n    env?: NodeJS.ProcessEnv | undefined;\n}',
+    declaration: 'export interface SubprocessSpawnSpec {\n    argv: readonly string[];\n    cwd: string;\n    world?: ExecutionLocation | undefined;\n    stdio: SubprocessStdio;\n    graceMs: number;\n    signal?: AbortSignal | undefined;\n    env?: NodeJS.ProcessEnv | undefined;\n}',
   },
   {
     name: 'SubprocessStdinMode',
@@ -4215,7 +4433,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubprocessTerminalSpawnSpec',
-    declaration: 'export interface SubprocessTerminalSpawnSpec {\n    argv: readonly string[];\n    cwd: string;\n    env?: Record<string, string> | undefined;\n    rows: number;\n    cols: number;\n    graceMs: number;\n    signal?: AbortSignal | undefined;\n}',
+    declaration: 'export interface SubprocessTerminalSpawnSpec {\n    argv: readonly string[];\n    cwd: string;\n    world?: ExecutionLocation | undefined;\n    env?: Record<string, string> | undefined;\n    rows: number;\n    cols: number;\n    graceMs: number;\n    signal?: AbortSignal | undefined;\n}',
   },
   {
     name: 'SurfaceEvent',
@@ -4644,6 +4862,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkflowStopReason',
     declaration: 'export type WorkflowStopReason = \'completed\' | \'cancelled\' | \'error\';',
+  },
+  {
+    name: 'WorkspaceDirEntry',
+    declaration: 'export interface WorkspaceDirEntry {\n    readonly name: string;\n    readonly type: \'file\' | \'directory\' | \'other\';\n    readonly size?: number;\n}',
+  },
+  {
+    name: 'WorkspaceProviderOperations',
+    declaration: 'export interface WorkspaceProviderOperations {\n    canonicalize(location: ExecutionLocation, path: string, opts?: {\n        signal?: AbortSignal;\n    }): Promise<string>;\n    status(location: ExecutionLocation, opts?: {\n        signal?: AbortSignal;\n    }): Promise<WorkspaceStatus>;\n    listDirectory(location: ExecutionLocation, path: string, opts?: {\n        signal?: AbortSignal;\n    }): Promise<WorkspaceDirEntry[]>;\n    createDirectory(location: ExecutionLocation, path: string, opts?: {\n        signal?: AbortSignal;\n    }): Promise<void>;\n    ensureSessionRoot(location: ExecutionLocation): Promise<string>;\n    resolveLocation(input: {\n        readonly providerId: string;\n        readonly target: ExecutionJsonValue;\n        readonly path: string;\n    }): Promise<ExecutionLocation>;\n}',
+  },
+  {
+    name: 'WorkspaceStatus',
+    declaration: 'export type WorkspaceStatus = {\n    readonly kind: \'ok\';\n} | {\n    readonly kind: \'missing-dir\';\n    readonly message?: string;\n} | {\n    readonly kind: \'unreachable\';\n    readonly message?: string;\n} | {\n    readonly kind: \'invalid\';\n    readonly message?: string;\n};',
   },
 ]
 

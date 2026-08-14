@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"aaaaaaaa-0000-4000-8000-000000000001","createdAt":1783352126000,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"aaaaaaaa-0000-4000-8000-000000000001","createdAt":1783352126000,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1786338530687,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Use the subagent tool TWICE in the SAME assistant message (two parallel tool calls in one response), each delegating the identical subtask: 'Reply with exactly the word ALPHA and nothing else.' Give both calls the description 'Say the word ALPHA'. After both subagents return, reply with the single word PARENT_DONE and stop. Do not use the bash tool."}],"source":{"kind":"user"},"role":"user","id":"02062dd0-83d4-4b40-ab23-2fbcb0a8be96"}]}}
 {"type":"turn/start","seq":1,"time":1786338530688,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1786338530688,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

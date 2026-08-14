@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498792491,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Run two shell commands: wait for cancellation, then write skipped.txt."}],"source":{"kind":"user"},"role":"user","id":"6025dc7c-dc38-4a34-b7b1-688102631c75"}]}}
 {"type":"turn/start","seq":1,"time":1785821402705,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821402705,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"55555555-5555-4555-8555-555555555555","createdAt":2001,"cwd":"{{cwd}}","parentSession":"44444444-4444-4444-8444-444444444444","origin":"subagent","delegationDepth":1}
+{"type":"session","version":1,"id":"55555555-5555-4555-8555-555555555555","createdAt":2001,"cwd":"{{cwd}}","parentSession":"44444444-4444-4444-8444-444444444444","origin":"subagent","delegationDepth":1}
 {"type":"approval/policy","seq":0,"time":1786357535138,"data":{"policy":"never","source":"delegation"}}
 {"type":"agent/inbox/spliced","seq":1,"time":1786357535138,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Call ask_user_question once to ask whether deployment should use the CUDA fallback. If the tool returns an error, include the unresolved question verbatim in your final result."}],"source":{"kind":"user"},"role":"user","id":"106c2785-219e-46e8-8386-497ac6a98f68"}]}}
 {"type":"turn/start","seq":2,"time":1786357535138,"data":{"turn":1}}

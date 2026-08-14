@@ -6,6 +6,7 @@
  */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { ExecutionLocation } from '@deepseek-ai/dsh-execution-world'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 
 /**
@@ -15,18 +16,27 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 export type WorkspaceId = Branded<'WorkspaceId'>
 
 /**
- * One workspace: a stable id over an existing directory, a display title, and
- * an ordered candidate account of sessions. Membership requires both an id in
- * that account and a session header whose canonical cwd equals the workspace
- * path. Consumers only see this interface; the implementation stays private.
+ * One workspace: a stable id over an existing directory in one execution
+ * world, a display title, and an ordered candidate account of sessions.
+ * Membership requires both an id in that account and a session header whose
+ * canonical execution location equals the workspace location. Consumers only
+ * see this interface; the implementation stays private.
  */
 export interface Workspace {
   /** Stable record id (generated uuid). */
   readonly id: WorkspaceId
 
   /**
-   * Canonical directory path: the `fs.realpath` of the path given at create
-   * time (trailing slashes, `..`, and symlinks all resolved). Never rewritten
+   * The execution world this workspace lives in. The local world
+   * (`{ providerId: 'local', target: null, root }`) is the default for
+   * records created before locations existed.
+   */
+  readonly location: ExecutionLocation
+
+  /**
+   * Canonical directory path in the workspace's execution world: the
+   * provider's canonicalization of the path given at create time (trailing
+   * slashes, `..`, and symlinks all resolved in-world). Never rewritten
    * afterwards, even when the directory disappears (see {@link status}).
    */
   readonly path: string
@@ -44,9 +54,9 @@ export interface Workspace {
    * Header-validated sessions in manually owned order: a new session is
    * prepended at attach, explicit reordering goes through
    * `insertSessionBefore`, and activity never reorders. The durable candidate
-   * account is filtered synchronously: missing headers, invalid cwd values,
-   * and canonical cwd mismatches are never returned. A subsequent workspace
-   * mutation prunes those filtered candidates durably.
+   * account is filtered synchronously: missing headers, invalid locations,
+   * and canonical location mismatches are never returned. A subsequent
+   * workspace mutation prunes those filtered candidates durably.
    */
   readonly sessionIds: readonly SessionId[]
 
@@ -61,10 +71,9 @@ export interface Workspace {
    * Prepend a session to this workspace's candidate account. An already
    * accounted id resolves without writing, aside from the durable
    * filtered-candidate prune every accepted mutation performs. A new id's
-   * live or persisted
-   * header cwd must resolve to an existing directory equal to {@link path};
-   * unknown ids, missing or invalid cwd values, and mismatches reject without
-   * writing.
+   * live or persisted header location must resolve to an existing directory
+   * equal to {@link location}; unknown ids, missing or invalid locations,
+   * and mismatches reject without writing.
    * @param sessionId - The session to record.
    * @returns resolution after durability.
    */
@@ -95,9 +104,9 @@ export interface Workspace {
   detachSession(sessionId: SessionId): Promise<void>
 
   /**
-   * Live directory check, uncached: whether {@link path} currently exists and
-   * is a directory. A missing directory never mutates the record — the
-   * directory may only be temporarily moved.
+   * Live directory check, uncached: whether the workspace's root directory
+   * currently exists in its execution world. A missing directory never
+   * mutates the record — the directory may only be temporarily moved.
    * @returns `'ok'` when the directory exists, `'missing-dir'` otherwise.
    */
   status(): Promise<'ok' | 'missing-dir'>

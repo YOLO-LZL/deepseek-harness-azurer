@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"669e8682-49fc-4dff-9bc7-6280e283cbe4","createdAt":1783962504097,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"669e8682-49fc-4dff-9bc7-6280e283cbe4","createdAt":1783962504097,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498813580,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Call the bash tool to run exactly: echo HELLO. If the first tool result is rejected, retry that command once. Quote the final tool result verbatim and stop."}],"source":{"kind":"user"},"role":"user","id":"ff685d2f-c629-45a2-a6b1-9aba6679e804"}]}}
 {"type":"turn/start","seq":1,"time":1785821430450,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821430451,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

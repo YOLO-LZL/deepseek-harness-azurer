@@ -209,7 +209,7 @@ Additional instructions from: nested\AGENTS.md`,
 })
 
 describe('normalizeSessionLog', () => {
-  const header = (over: object) => JSON.stringify({ type: 'session', version: 0, id: 's', createdAt: 123, ...over })
+  const header = (over: object) => JSON.stringify({ type: 'session', version: 1, id: 's', createdAt: 123, ...over })
   const event = (over: object) => JSON.stringify({ type: 'turn/start', seq: 1, time: 999, data: { turn: 1 }, ...over })
 
   it('zeroes the header createdAt', () => {
@@ -514,7 +514,7 @@ describe('extractSnapshotSpillPaths', () => {
 })
 
 describe('scrubRequestHeaders', () => {
-  const headerLine = JSON.stringify({ type: 'session', version: 0, id: 's', createdAt: 1, cwd: '/w' })
+  const headerLine = JSON.stringify({ type: 'session', version: 1, id: 's', createdAt: 1, cwd: '/w' })
   const headerEvent = (header: object) =>
     JSON.stringify({ type: 'request/header', seq: 3, time: 9, data: { header, reason: 'initial' } })
 

@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"b5639b9d-99a9-49e4-83da-77e6caa702be","createdAt":1783352099834,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"b5639b9d-99a9-49e4-83da-77e6caa702be","createdAt":1783352099834,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498783700,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Use the read tool (NOT bash) with offset 5 and limit 4 to read lines 5 through 8 of big.txt in the current directory. Then reply with exactly the single word DONE."}],"source":{"kind":"user"},"role":"user","id":"a6db8c80-6239-490e-8ee4-1e2074d73a19"}]}}
 {"type":"turn/start","seq":1,"time":1785821392334,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821392334,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

@@ -34,7 +34,7 @@ const FULL_COUNTS = `${TURNS} turns · ${TURNS} steps`
  */
 function buildSeed(turns: number): string {
   const lines = [JSON.stringify({
-    type: 'session', version: 0, id: '{{sessionId}}', createdAt: 1784974100000, cwd: '{{cwd}}/workspace',
+    type: 'session', version: 1, id: '{{sessionId}}', createdAt: 1784974100000, cwd: '{{cwd}}/workspace',
   })]
   let seq = 0
   let time = 1784974100000

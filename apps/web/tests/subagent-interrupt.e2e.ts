@@ -82,7 +82,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagent.interrupt over the real co
     // derived script entirely; the path only anchors replay installation.
     await writeFile(
       join(sidecarRoot, 'session.jsonl'),
-      '{"type":"session","version":0,"id":"primary","createdAt":0}\n',
+      '{"type":"session","version":1,"id":"primary","createdAt":0}\n',
     )
     scaffold = await launchWebScaffold({
       replayFixture: join(sidecarRoot, 'session.jsonl'),

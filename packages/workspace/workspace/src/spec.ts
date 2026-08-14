@@ -9,14 +9,18 @@ import { z } from 'zod'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import type { WorkspaceId } from './types.ts'
+import { executionLocationSchema } from './location.ts'
 
 /** Workspace id schema at the durable boundary; branding has no runtime representation. */
 const workspaceId = z.string().transform(value => value as WorkspaceId)
 
 /**
- * Durable shape of one workspace record. `path` is the `fs.realpath` canon
- * stamped at create; `sessionIds` is the ordered ownership account (array
- * order is display order); timestamps are ISO-8601 strings.
+ * Durable shape of one workspace record. `path` is the canonical absolute
+ * directory in the record's execution world, stamped at create; `sessionIds`
+ * is the ordered ownership account (array order is display order);
+ * timestamps are ISO-8601 strings. `location` names the execution world the
+ * workspace lives in; a record written before the field existed is
+ * interpreted as the local world at `path`.
  */
 export const workspaceRecord = z.object({
   path: z.string(),
@@ -24,6 +28,7 @@ export const workspaceRecord = z.object({
   sessionIds: z.array(z.string().transform(SessionId)),
   createdAt: z.string(),
   updatedAt: z.string(),
+  location: executionLocationSchema.optional(),
 })
 
 /** One stored workspace record, inferred from {@link workspaceRecord}. */

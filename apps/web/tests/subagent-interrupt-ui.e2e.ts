@@ -107,7 +107,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     ]))
     await writeFile(
       join(sidecarRoot, 'session.jsonl'),
-      '{"type":"session","version":0,"id":"primary","createdAt":0}\n',
+      '{"type":"session","version":1,"id":"primary","createdAt":0}\n',
     )
     // The parent's one prompted turn replays this recorded single text-only
     // call (binding is positional, not lineage-aware).

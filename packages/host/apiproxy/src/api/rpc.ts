@@ -39,6 +39,14 @@ export interface RpcErrorDetailsMap {
   'workspace-attach-failed': { sessionId: SessionId; workspaceId: string }
   'workspace-not-found': { workspaceId: string }
   'workspace-invalid-path': { path: string }
+  /** A workspace create named an unknown execution provider or a bad target reference. */
+  'workspace-provider-invalid-target': { path: string }
+  /** A workspace create path failed the owning provider's remote-path validation. */
+  'workspace-remote-path-invalid': { path: string }
+  /** The execution world cannot serve right now (ssh client missing, connection refused). */
+  'execution-unavailable': { path: string }
+  /** A location named an unregistered execution provider. */
+  'execution-provider-not-found': { path: string }
   'workspace-name-conflict': { name: string }
   'workspace-move-invalid': { workspaceId: string; sessionId: SessionId; beforeSessionId?: SessionId }
   'directory-unreadable': { path: string }

@@ -50,7 +50,7 @@ function fakeAgent(ctx: Context, sessionId: string, delivery: FakeDelivery = {})
     inject: delivery.inject ?? (() => {}),
     followup: delivery.followup ?? (() => {}),
     status: delivery.status ?? 'running',
-    session: { id, header: { version: 0, id, createdAt: 0 } },
+    session: { id, header: { version: 1, id, createdAt: 0 } },
   } as unknown as Agent
   agentRegistryDisposers.set(agent, ctx.agents.register(agent))
   agentScopeFibers.set(agent, scopeFiber)
@@ -534,7 +534,7 @@ describe('completion notices across scoped mounts', () => {
       id: SessionId('sess-scoped'),
       ctx: agentScope.ctx,
       inject,
-      session: { id: SessionId('sess-scoped'), header: { version: 0, id: SessionId('sess-scoped'), createdAt: 0 } },
+      session: { id: SessionId('sess-scoped'), header: { version: 1, id: SessionId('sess-scoped'), createdAt: 0 } },
     } as unknown as Agent
     const dispose = ctx.agents.register(owner)
 

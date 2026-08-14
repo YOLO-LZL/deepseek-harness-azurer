@@ -56,6 +56,12 @@ interface LspQueryRequest {
   readonly position: LspPosition
   /** The workspace root the provider resolves against and indexes; required, never defaulted. */
   readonly workspaceRoot: string
+  /**
+   * The calling session's execution location, when it is remote (SSH). The
+   * provider then resolves the language server executable and spawns the
+   * process inside that world, and reads the workspace from its filesystem.
+   */
+  readonly executionLocation?: ExecutionLocation
 }
 ```
 
@@ -198,5 +204,5 @@ registerProvider(provider: LspProvider): () => void
 query(request: LspQueryRequest, signal?: AbortSignal): Promise<LspQueryResult>
 ```
 
-Source: [`packages/lsp/lsp/src/types.ts:113`](../../packages/lsp/lsp/src/types.ts)
+Source: [`packages/lsp/lsp/src/types.ts:120`](../../packages/lsp/lsp/src/types.ts)
 <!-- END GENERATED cordis-surface -->

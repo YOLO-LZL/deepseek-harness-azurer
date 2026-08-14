@@ -28,7 +28,7 @@ function execution(sessionId?: string): ToolExecution {
     arguments: { command: 'true' },
     ...(sessionId === undefined
       ? {}
-      : { agent: { session: { header: { version: 0, id: sessionId, createdAt: 0 } } } as Agent }),
+      : { agent: { session: { header: { version: 1, id: sessionId, createdAt: 0 } } } as Agent }),
   }
 }
 

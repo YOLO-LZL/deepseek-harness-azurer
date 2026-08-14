@@ -20,7 +20,7 @@ import type { WorkspaceDomainState, WorkspaceRecord } from '../src/index.ts'
 const DOMAIN_VERSION = 2
 
 const header = (id: string, cwd?: string, createdAt = 0): SessionHeader => ({
-  version: 0,
+  version: 1,
   id: SessionId(id),
   createdAt,
   ...(cwd === undefined ? {} : { cwd }),
@@ -343,7 +343,7 @@ describe('WorkspaceRegistry lifecycle and bootstrap', () => {
   it('closes its domain on disposal and reloads the persisted stable order', async () => {
     const dir = await makeDir('replug')
     const result = await harness()
-    const first = await result.registry.create(dir)
+    const first = await result.registry.create({ kind: 'local' as const, path: dir })
     await result.fiber.dispose()
     const nextFiber = await result.ctx.plugin(WorkspaceRegistry)
     expect(result.ctx.workspaceRegistry.list().map(workspace => workspace.id)).toEqual([first.id])
@@ -358,9 +358,9 @@ describe('WorkspaceRegistry create and lookup', () => {
     const alias = join(base, 'first-link')
     await symlink(firstDir, alias)
     const { registry, pool } = await harness()
-    const first = await registry.create(firstDir, 'Original')
-    const second = await registry.create(secondDir)
-    const reused = await registry.create(alias, 'Ignored')
+    const first = await registry.create({ kind: 'local' as const, path: firstDir }, 'Original')
+    const second = await registry.create({ kind: 'local' as const, path: secondDir })
+    const reused = await registry.create({ kind: 'local' as const, path: alias }, 'Ignored')
     expect(reused).toBe(first)
     expect(first.title).toBe('Original')
     expect(registry.list()).toEqual([second, first])
@@ -373,8 +373,8 @@ describe('WorkspaceRegistry create and lookup', () => {
     const dir = await makeDir('concurrent')
     const { registry, pool } = await harness()
     const [left, right] = await Promise.all([
-      registry.create(dir, 'Winner'),
-      registry.create(dir, 'Loser'),
+      registry.create({ kind: 'local' as const, path: dir }, 'Winner'),
+      registry.create({ kind: 'local' as const, path: dir }, 'Loser'),
     ])
     expect(left).toBe(right)
     expect(registry.list()).toEqual([left])
@@ -385,8 +385,8 @@ describe('WorkspaceRegistry create and lookup', () => {
     const firstDir = await makeDir('named-first')
     const secondDir = await makeDir('named-second')
     const { registry } = await harness()
-    const first = await registry.create(firstDir, 'Shared')
-    const second = await registry.create(secondDir, 'Shared')
+    const first = await registry.create({ kind: 'local' as const, path: firstDir }, 'Shared')
+    const second = await registry.create({ kind: 'local' as const, path: secondDir }, 'Shared')
     expect(first.title).toBe('Shared')
     expect(second.title).toBe('Shared')
     expect(registry.list()).toEqual([second, first])
@@ -397,8 +397,8 @@ describe('WorkspaceRegistry create and lookup', () => {
     const file = join(parent, 'plain.txt')
     await writeFile(file, 'file')
     const { registry } = await harness()
-    await expect(registry.create(join(parent, 'missing'))).rejects.toMatchObject({ code: 'ENOENT' })
-    await expect(registry.create(file)).rejects.toThrow(/not a directory/)
+    await expect(registry.create({ kind: 'local' as const, path: join(parent, 'missing') })).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(registry.create({ kind: 'local' as const, path: file })).rejects.toThrow(/not a directory/)
     await expect(registry.resolveByPath(join(parent, 'missing'))).rejects.toMatchObject({ code: 'ENOENT' })
     expect(registry.list()).toEqual([])
   })
@@ -410,9 +410,9 @@ describe('WorkspaceRegistry create and lookup', () => {
       pool,
       backend: selectiveFailureBackend(pool, { putAt: 1 }),
     })
-    await expect(result.registry.create(dir)).rejects.toThrow(/selected bootstrap put failure/)
+    await expect(result.registry.create({ kind: 'local' as const, path: dir })).rejects.toThrow(/selected bootstrap put failure/)
     expect(result.registry.list()).toEqual([])
-    expect(await result.registry.create(dir)).toBeDefined()
+    expect(await result.registry.create({ kind: 'local' as const, path: dir })).toBeDefined()
   })
 
   it('does not publish a Workspace when its pending marker cannot be written', async () => {
@@ -422,7 +422,7 @@ describe('WorkspaceRegistry create and lookup', () => {
       pool,
       backend: selectiveFailureBackend(pool, { globalAt: 2 }),
     })
-    await expect(result.registry.create(dir)).rejects.toThrow(/selected bootstrap marker failure/)
+    await expect(result.registry.create({ kind: 'local' as const, path: dir })).rejects.toThrow(/selected bootstrap marker failure/)
     expect(result.registry.list()).toEqual([])
     expect(pool.media.get('workspace')!.tables.get('workspaces')?.size ?? 0).toBe(0)
   })
@@ -434,7 +434,7 @@ describe('WorkspaceRegistry create and lookup', () => {
       pool,
       backend: selectiveFailureBackend(pool, { globalAt: 3 }),
     })
-    await expect(result.registry.create(dir)).rejects.toThrow(/marker failure/)
+    await expect(result.registry.create({ kind: 'local' as const, path: dir })).rejects.toThrow(/marker failure/)
     expect(result.registry.list()).toEqual([])
     expect(pool.media.get('workspace')!.tables.get('workspaces')!.size).toBe(0)
   })
@@ -446,7 +446,7 @@ describe('WorkspaceRegistry create and lookup', () => {
       pool,
       backend: selectiveFailureBackend(pool, { globalAt: 3, deleteAt: 1 }),
     })
-    await expect(result.registry.create(dir)).rejects.toBeInstanceOf(AggregateError)
+    await expect(result.registry.create({ kind: 'local' as const, path: dir })).rejects.toBeInstanceOf(AggregateError)
     expect(pool.media.get('workspace')!.tables.get('workspaces')!.size).toBe(1)
   })
 
@@ -457,7 +457,7 @@ describe('WorkspaceRegistry create and lookup', () => {
       pool,
       backend: selectiveFailureBackend(pool, { putAt: 1, globalAt: 3 }),
     })
-    await expect(result.registry.create(dir)).rejects.toBeInstanceOf(AggregateError)
+    await expect(result.registry.create({ kind: 'local' as const, path: dir })).rejects.toBeInstanceOf(AggregateError)
     expect(storedState(pool)).toMatchObject({
       pendingMutation: { operation: 'create' },
     })
@@ -470,7 +470,7 @@ describe('WorkspaceRegistry create and lookup', () => {
       pool,
       backend: selectiveFailureBackend(pool, { globalAt: [3, 4] }),
     })
-    await expect(result.registry.create(dir)).rejects.toBeInstanceOf(AggregateError)
+    await expect(result.registry.create({ kind: 'local' as const, path: dir })).rejects.toBeInstanceOf(AggregateError)
     expect(storedState(pool)).toMatchObject({
       pendingMutation: { operation: 'create' },
     })
@@ -479,7 +479,7 @@ describe('WorkspaceRegistry create and lookup', () => {
   it('deletes only the registration and leaves its directory and session headers untouched', async () => {
     const dir = await makeDir('delete-registration')
     const result = await harness({ sessions: [header('kept-session', dir)] })
-    const workspace = await result.registry.create(dir)
+    const workspace = await result.registry.create({ kind: 'local' as const, path: dir })
     await workspace.attachSession(SessionId('kept-session'))
 
     await expect(result.registry.delete(workspace.id)).resolves.toBe(true)
@@ -493,7 +493,7 @@ describe('WorkspaceRegistry create and lookup', () => {
     expect(result.load).not.toHaveBeenCalled()
     expect(result.inspect).not.toHaveBeenCalled()
 
-    const reregistered = await result.registry.create(dir)
+    const reregistered = await result.registry.create({ kind: 'local' as const, path: dir })
     expect(reregistered.id).not.toBe(workspace.id)
     expect(reregistered.path).toBe(dir)
     expect(reregistered.sessionIds).toEqual([])
@@ -506,7 +506,7 @@ describe('WorkspaceRegistry create and lookup', () => {
       pool,
       backend: selectiveFailureBackend(pool, { deleteAt: 1 }),
     })
-    const workspace = await result.registry.create(dir)
+    const workspace = await result.registry.create({ kind: 'local' as const, path: dir })
 
     await expect(result.registry.delete(workspace.id)).rejects.toThrow(/selected rollback delete failure/)
     expect(result.registry.get(workspace.id)).toBe(workspace)
@@ -522,7 +522,7 @@ describe('WorkspaceRegistry create and lookup', () => {
       pool,
       backend: selectiveFailureBackend(pool, { globalAt: 5 }),
     })
-    const workspace = await first.registry.create(dir)
+    const workspace = await first.registry.create({ kind: 'local' as const, path: dir })
 
     await expect(first.registry.delete(workspace.id)).resolves.toBe(true)
     expect(first.registry.list()).toEqual([])
@@ -532,7 +532,7 @@ describe('WorkspaceRegistry create and lookup', () => {
       archivedSessionIds: [],
       pendingMutation: { operation: 'delete', workspaceId: workspace.id },
     })
-    const reregistered = await first.registry.create(dir)
+    const reregistered = await first.registry.create({ kind: 'local' as const, path: dir })
     expect(reregistered.id).not.toBe(workspace.id)
     expect(storedState(pool)).toEqual({
       initialized: true,
@@ -552,7 +552,7 @@ describe('WorkspaceRegistry create and lookup', () => {
       pool,
       backend: selectiveFailureBackend(pool, { deleteAt: 1, globalAt: 5 }),
     })
-    const workspace = await result.registry.create(dir)
+    const workspace = await result.registry.create({ kind: 'local' as const, path: dir })
 
     await expect(result.registry.delete(workspace.id)).rejects.toBeInstanceOf(AggregateError)
     expect(result.registry.get(workspace.id)).toBeUndefined()
@@ -565,7 +565,7 @@ describe('WorkspaceRegistry create and lookup', () => {
   it('rejects table access before the registry has started', async () => {
     const dir = await makeDir('unstarted')
     const registry = new WorkspaceRegistry(new Context())
-    await expect(registry.create(dir)).rejects.toThrow(/not started/)
+    await expect(registry.create({ kind: 'local' as const, path: dir })).rejects.toThrow(/not started/)
     expect(() => registry.list()).toThrow(/not started/)
     const internals = registry as unknown as { requireTable(): unknown }
     expect(() => internals.requireTable()).toThrow(/not started/)
@@ -578,9 +578,9 @@ describe('Workspace registry ordering', () => {
     const secondDir = await makeDir('order-second')
     const thirdDir = await makeDir('order-third')
     const result = await harness()
-    const first = await result.registry.create(firstDir)
-    const second = await result.registry.create(secondDir)
-    const third = await result.registry.create(thirdDir)
+    const first = await result.registry.create({ kind: 'local' as const, path: firstDir })
+    const second = await result.registry.create({ kind: 'local' as const, path: secondDir })
+    const third = await result.registry.create({ kind: 'local' as const, path: thirdDir })
     expect(result.registry.list().map(item => item.id)).toEqual([third.id, second.id, first.id])
 
     await expect(result.registry.insertBefore(first.id, second.id))
@@ -597,8 +597,8 @@ describe('Workspace registry ordering', () => {
     const firstDir = await makeDir('order-noop-first')
     const secondDir = await makeDir('order-noop-second')
     const result = await harness()
-    const first = await result.registry.create(firstDir)
-    const second = await result.registry.create(secondDir)
+    const first = await result.registry.create({ kind: 'local' as const, path: firstDir })
+    const second = await result.registry.create({ kind: 'local' as const, path: secondDir })
     const written = result.changes.length
 
     await result.registry.insertBefore(second.id, second.id)
@@ -623,7 +623,7 @@ describe('Workspace session ordering', () => {
       header('s1', dir, 1),
       header('s2', dir, 2),
     ])
-    const workspace = await result.registry.create(dir)
+    const workspace = await result.registry.create({ kind: 'local' as const, path: dir })
     await workspace.attachSession(SessionId('s1'))
     await workspace.attachSession(SessionId('s2'))
     expect(workspace.sessionIds).toEqual(['s2', 's1'])
@@ -636,7 +636,7 @@ describe('Workspace session ordering', () => {
     const dir = await makeDir('insert-before')
     const result = await harness()
     result.setSessions([header('s1', dir, 1), header('s2', dir, 2), header('s3', dir, 3)])
-    const workspace = await result.registry.create(dir)
+    const workspace = await result.registry.create({ kind: 'local' as const, path: dir })
     await workspace.attachSession(SessionId('s1'))
     await workspace.attachSession(SessionId('s2'))
     await workspace.attachSession(SessionId('s3'))
@@ -653,7 +653,7 @@ describe('Workspace session ordering', () => {
     const dir = await makeDir('insert-noop')
     const result = await harness()
     result.setSessions([header('s1', dir, 1), header('s2', dir, 2)])
-    const workspace = await result.registry.create(dir)
+    const workspace = await result.registry.create({ kind: 'local' as const, path: dir })
     await workspace.attachSession(SessionId('s1'))
     await workspace.attachSession(SessionId('s2'))
     const written = result.changes.length
@@ -670,7 +670,7 @@ describe('Workspace session ordering', () => {
     const dir = await makeDir('insert-invalid')
     const result = await harness()
     result.setSessions([header('s1', dir, 1)])
-    const workspace = await result.registry.create(dir)
+    const workspace = await result.registry.create({ kind: 'local' as const, path: dir })
     await workspace.attachSession(SessionId('s1'))
     const written = result.changes.length
 
@@ -685,7 +685,7 @@ describe('Workspace session ordering', () => {
   it('validates a lazy live session without requiring it in persistence.list()', async () => {
     const dir = await makeDir('live')
     const result = await harness({ sessions: [], liveSessions: [header('live', dir, 1)] })
-    const workspace = await result.registry.create(dir)
+    const workspace = await result.registry.create({ kind: 'local' as const, path: dir })
     await workspace.attachSession(SessionId('live'))
     expect(workspace.sessionIds).toEqual(['live'])
     expect(result.list).toHaveBeenCalledTimes(1)
@@ -705,7 +705,7 @@ describe('Workspace session ordering', () => {
       header('file', file),
     ])
     await rm(gone, { recursive: true })
-    const workspace = await result.registry.create(dir)
+    const workspace = await result.registry.create({ kind: 'local' as const, path: dir })
     await expect(workspace.attachSession(SessionId('mismatch'))).rejects.toThrow(/resolves to/)
     await expect(workspace.attachSession(SessionId('no-cwd'))).rejects.toThrow(/no cwd/)
     await expect(workspace.attachSession(SessionId('gone'))).rejects.toThrow(/does not resolve/)
@@ -717,7 +717,7 @@ describe('Workspace session ordering', () => {
   it('decides detach/attach membership at domain write-chain slots', async () => {
     const dir = await makeDir('race')
     const result = await harness({ sessions: [header('s1', dir)] })
-    const workspace = await result.registry.create(dir)
+    const workspace = await result.registry.create({ kind: 'local' as const, path: dir })
     await workspace.attachSession(SessionId('s1'))
     const detached = workspace.detachSession(SessionId('s1'))
     const attached = workspace.attachSession(SessionId('s1'))
@@ -794,7 +794,7 @@ describe('header-validated membership projection', () => {
   it('fails list if the durable order and entity cache are externally diverged', async () => {
     const dir = await makeDir('cache-diverged')
     const result = await harness()
-    const workspace = await result.registry.create(dir)
+    const workspace = await result.registry.create({ kind: 'local' as const, path: dir })
     const internals = result.registry as unknown as { entities: Map<WorkspaceId, unknown> }
     internals.entities.delete(workspace.id)
     expect(() => result.registry.list()).toThrow(/references missing workspace/)
@@ -848,7 +848,7 @@ describe('workspace mutation and status', () => {
   it('keeps createdAt stable, advances updatedAt, and preserves snapshot on write failure', async () => {
     const dir = await makeDir('timestamps')
     const result = await harness()
-    const workspace = await result.registry.create(dir)
+    const workspace = await result.registry.create({ kind: 'local' as const, path: dir })
     const createdAt = workspace.createdAt
     expect(workspace.updatedAt).toBe(createdAt)
     await workspace.setTitle('kept')
@@ -862,7 +862,7 @@ describe('workspace mutation and status', () => {
   it('reports directory disappearance without mutating the workspace', async () => {
     const dir = await makeDir('vanishing')
     const { registry } = await harness()
-    const workspace = await registry.create(dir)
+    const workspace = await registry.create({ kind: 'local' as const, path: dir })
     expect(await workspace.status()).toBe('ok')
     await rm(dir, { recursive: true })
     expect(await workspace.status()).toBe('missing-dir')

@@ -7,6 +7,7 @@
  * @module @deepseek-ai/dsh-lsp/types
  */
 
+import type { ExecutionLocation } from '@deepseek-ai/dsh-execution-location'
 import type { LspProviderId } from './brand.ts'
 
 /**
@@ -44,6 +45,12 @@ export interface LspQueryRequest {
   readonly position: LspPosition
   /** The workspace root the provider resolves against and indexes; required, never defaulted. */
   readonly workspaceRoot: string
+  /**
+   * The calling session's execution location, when it is remote (SSH). The
+   * provider then resolves the language server executable and spawns the
+   * process inside that world, and reads the workspace from its filesystem.
+   */
+  readonly executionLocation?: ExecutionLocation
 }
 
 /**

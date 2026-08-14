@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"{{sessionId}}","createdAt":1785421232654,"cwd":"{{cwd}}/workspace"}
+{"type":"session","version":1,"id":"{{sessionId}}","createdAt":1785421232654,"cwd":"{{cwd}}/workspace"}
 {"type":"command/run","seq":0,"time":1785421232715,"data":{"commandId":"cmd-56ed2b36-1","name":"permission","args":" read-only","source":{"kind":"user"}}}
 {"type":"permission/preset","seq":1,"time":1785421232715,"data":{"preset":"read-only"}}
 {"type":"sandbox/mode","seq":2,"time":1785421232716,"data":{"mode":"read-only"}}

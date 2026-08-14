@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"fdcab4d0-e5e4-4a06-9195-be8f7049d67e","createdAt":1783352078749,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"fdcab4d0-e5e4-4a06-9195-be8f7049d67e","createdAt":1783352078749,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498780355,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Use the write tool (NOT bash) to create a file named notes.txt in the current directory containing exactly the single line: hello world. Then reply with exactly the single word DONE."}],"source":{"kind":"user"},"role":"user","id":"8316fddb-e888-4ba9-b280-2d2bb8717633"}]}}
 {"type":"turn/start","seq":1,"time":1785821387697,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821387697,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

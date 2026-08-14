@@ -43,7 +43,7 @@ const COMPACTION_ID = CompactionId('replay-compaction')
 function sessionJsonl(events: SessionEvent[], header?: { id?: string; createdAt?: number; seedLength?: number }): string {
   const headerLine = JSON.stringify({
     type: 'session',
-    version: 0,
+    version: 1,
     id: header?.id ?? 's1',
     createdAt: header?.createdAt ?? 0,
     ...header?.seedLength !== undefined ? { seedLength: header.seedLength } : {},
@@ -91,13 +91,13 @@ describe('parseSessionLog', () => {
   })
 
   it('ignores blank lines', () => {
-    const header = JSON.stringify({ type: 'session', version: 0, id: 's1', createdAt: 0 })
+    const header = JSON.stringify({ type: 'session', version: 1, id: 's1', createdAt: 0 })
     const ev = chunkEvent(1, 1, 1, TEXT_CHUNKS[0] as StreamChunk)
     expect(parseSessionLog(`${header}\n\n${JSON.stringify(ev)}\n\n`)).toEqual([ev])
   })
 
   it('expands a packed chunk row into its events (a fixture recorded with packChunks on)', () => {
-    const header = JSON.stringify({ type: 'session', version: 0, id: 's1', createdAt: 0 })
+    const header = JSON.stringify({ type: 'session', version: 1, id: 's1', createdAt: 0 })
     const row = JSON.stringify({
       type: 'text-chunks', seq0: 1, time0: 0,
       data: { turn: 1, step: 1, index: 0, dt: [0, 0], texts: ['a', 'b', 'c'] },
@@ -273,7 +273,7 @@ describe('deriveReplayScript', () => {
 
   it('rejects a persisted marked compact LLM call without its complete output', () => {
     const [event] = parseSessionLog([
-      JSON.stringify({ type: 'session', version: 0, id: 'invalid-compact', createdAt: 0 }),
+      JSON.stringify({ type: 'session', version: 1, id: 'invalid-compact', createdAt: 0 }),
       JSON.stringify({
         type: 'compaction/summary',
         seq: 1,
@@ -924,12 +924,12 @@ describe('parseSessionHeader', () => {
   })
 
   it('reads a non-zero seedLength (a fork child header)', () => {
-    expect(parseSessionHeader('{"type":"session","version":0,"id":"child","createdAt":7,"seedLength":4}\n'))
+    expect(parseSessionHeader('{"type":"session","version":1,"id":"child","createdAt":7,"seedLength":4}\n'))
       .toEqual({ id: 'child', createdAt: 7, seedLength: 4 })
   })
 
   it('falls back to id="" / createdAt=0 / seedLength=0 when the header lacks them', () => {
-    expect(parseSessionHeader('{"type":"session","version":0}\n')).toEqual({ id: '', createdAt: 0, seedLength: 0 })
+    expect(parseSessionHeader('{"type":"session","version":1}\n')).toEqual({ id: '', createdAt: 0, seedLength: 0 })
   })
 
   it('falls back on an empty buffer (no header line)', () => {

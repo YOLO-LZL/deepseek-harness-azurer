@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"00000000-0000-0000-0000-000000000000","createdAt":0,"cwd":"/Users/cty/acp-snap-cwd-MABAjO","delegationDepth":0}
+{"type":"session","version":1,"id":"00000000-0000-0000-0000-000000000000","createdAt":0,"cwd":"/Users/cty/acp-snap-cwd-MABAjO","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498831793,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Use the write tool (NOT bash) to create session-root.txt in the current directory containing exactly: session root. Then reply with exactly the single word DONE."}],"source":{"kind":"user"},"role":"user","id":"f7d05c95-98f0-44b5-9463-2449682817ff"}]}}
 {"type":"turn/start","seq":1,"time":1785821448088,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821448088,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

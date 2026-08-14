@@ -1,12 +1,14 @@
 /**
  * workspace domain contract. Wire projection of the host-side workspace
- * entity (@deepseek-ai/dsh-workspace): a stable id over a directory path,
- * a display title, and the ordered session account. Method signatures are the
- * source of truth, same as the sessions domain.
+ * entity (@deepseek-ai/dsh-workspace): a stable id over a directory in one
+ * execution world (local or SSH), a display title, and the ordered session
+ * account. Method signatures are the source of truth, same as the sessions
+ * domain.
  */
 
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { ExecutionLocation } from '@deepseek-ai/dsh-execution-location'
 import type { RpcRequest, RpcResponse } from './rpc.ts'
 
 /**
@@ -20,8 +22,17 @@ export type WorkspaceId = Branded<'WorkspaceId'>
 /** One workspace row: the record projection every workspace.* value carries. */
 export interface WorkspaceView {
   workspaceId: WorkspaceId
-  /** Canonical directory path (host-side realpath canon). */
+  /**
+   * Canonical directory path in the workspace's execution world (the local
+   * realpath canon for local workspaces, the remote canonical path for SSH).
+   */
   path: string
+  /**
+   * The execution world this workspace lives in. The local world
+   * (`providerId: 'local'`) is the default for records created before
+   * locations existed.
+   */
+  location: ExecutionLocation
   /** Display title (defaults to the path basename at create). */
   title: string
   /**
@@ -34,6 +45,16 @@ export interface WorkspaceView {
   /** ISO-8601 last-mutation instant. */
   updatedAt: string
 }
+
+/** A workspace create request: a host directory or a provider target. */
+export type WorkspaceCreateInput =
+  | { readonly kind: 'local'; readonly path: string }
+  | {
+    readonly kind: 'provider'
+    readonly providerId: string
+    readonly target: ExecutionLocation['target']
+    readonly path: string
+  }
 
 /** Workspace-domain unary methods (the map keys workspace.* of RpcMethodMap). */
 export interface WorkspaceApi {
@@ -48,12 +69,14 @@ export interface WorkspaceApi {
   /**
    * Creates (or idempotently resolves) a workspace over an EXISTING directory
    * (no mkdir — a missing or non-directory path fails with
-   * `workspace-invalid-path`). A path resolving to a directory already owned
-   * by a workspace returns that workspace (`created: false`). Adoption allows
-   * distinct canonical paths whose basenames produce the same display title;
-   * the registry's basename title default names the new workspace.
+   * `workspace-invalid-path` for local paths; remote paths fail with
+   * `workspace-remote-path-invalid` or `workspace-provider-invalid-target`
+   * through the owning provider). A location resolving to a workspace already
+   * owned returns that workspace (`created: false`). Adoption allows
+   * distinct canonical locations whose basenames produce the same display
+   * title; the registry's basename title default names the new workspace.
    */
-  create(request: RpcRequest<{ path: string }>):
+  create(request: RpcRequest<WorkspaceCreateInput>):
   Promise<RpcResponse<{ workspace: WorkspaceView; created: boolean }>>
 
   /**

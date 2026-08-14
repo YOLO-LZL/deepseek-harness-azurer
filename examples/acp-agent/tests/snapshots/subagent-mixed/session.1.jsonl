@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"e4aafa18-b9e3-48d0-8aae-6c9b25dcae80","createdAt":1783352145223,"cwd":"{{cwd}}","parentSession":"959ffdf5-03e2-465e-9482-009b704632dc","origin":"subagent","delegationDepth":1}
+{"type":"session","version":1,"id":"e4aafa18-b9e3-48d0-8aae-6c9b25dcae80","createdAt":1783352145223,"cwd":"{{cwd}}","parentSession":"959ffdf5-03e2-465e-9482-009b704632dc","origin":"subagent","delegationDepth":1}
 {"type":"approval/policy","seq":0,"time":1786443013973,"data":{"policy":"never","source":"delegation"}}
 {"type":"agent/inbox/spliced","seq":1,"time":1786443013973,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Reply with exactly the word ALPHA and nothing else."}],"source":{"kind":"user"},"role":"user","id":"73ce401a-faaf-408a-879e-7485380d537d"}]}}
 {"type":"turn/start","seq":2,"time":1786443013974,"data":{"turn":1}}

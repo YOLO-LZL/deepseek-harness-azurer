@@ -24,6 +24,12 @@
       "path": "../../storage/storage-domain"
     },
     {
+      "path": "../../execution/execution-world"
+    },
+    {
+      "path": "../../execution/execution-location"
+    },
+    {
       "path": "../../core/session"
     },
     {

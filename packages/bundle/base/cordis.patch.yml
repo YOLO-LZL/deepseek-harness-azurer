@@ -163,6 +163,30 @@
     - id: subprocess
       name: '@deepseek-ai/dsh-subprocess-local'
 
+    # ── execution worlds ─────────────────────────────────────────────────────────
+    # The execution-world registry and the built-in local provider (routes
+    # default calls to the local filesystem/subprocess seams; every other world
+    # registers beside it).
+    - id: execution-world
+      name: '@deepseek-ai/dsh-execution-world'
+
+    - id: execution-world-local
+      name: '@deepseek-ai/dsh-execution-world/local'
+
+    # The in-repo SSH family: the connection registry + framed OpenSSH
+    # transport, the ssh execution-world provider (remote workspaces), and the
+    # ssh_exec / ssh_connections tools. Every row is best-effort: a missing ssh
+    # client, an unreadable ~/.ssh/config, or no saved connections never block
+    # startup — the capability status answers "unavailable" instead.
+    - id: ssh
+      name: '@deepseek-ai/dsh-ssh'
+
+    - id: workspace-ssh
+      name: '@deepseek-ai/dsh-workspace-ssh'
+
+    - id: tool-ssh
+      name: '@deepseek-ai/dsh-tool-ssh'
+
     # Every shipped CLI mode starts with the same file-effect boundary.
     # The environment remains an explicit deployment override; otherwise fresh
     # sessions pin workspace-write + ask through the permission service below.

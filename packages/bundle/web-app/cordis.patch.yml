@@ -219,6 +219,11 @@
     - id: ui-workspace
       name: '@deepseek-ai/dsh-client-ui-workspace'
 
+    # Built-in SSH: the SSH Connections settings section and the SSH workspace
+    # create method behind the picker's "本地 / SSH" segmented control.
+    - id: ui-ssh
+      name: '@deepseek-ai/dsh-client-ui-ssh'
+
     # Input triggers: the '/' | '@' pipeline (ui-input-trigger), the command surface over
     # it (ui-commands), and the two reference sources (ui-skill / ui-subagent).
     - id: ui-input-trigger

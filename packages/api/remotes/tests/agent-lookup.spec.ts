@@ -11,7 +11,7 @@ import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 const sid = (value: string): SessionId => value as SessionId
 
 function header(id: SessionId): SessionHeader {
-  return { version: 0, id, createdAt: 1, cwd: '/proj' }
+  return { version: 1, id, createdAt: 1, cwd: '/proj' }
 }
 
 async function createContext(): Promise<Context> {

@@ -16,7 +16,7 @@ A backend that reloads a log crashed mid-turn finds an open `turn/start` with no
 
 Repair applies only to cold sessions. For a live id, `SessionPersistence.load(id)` waits until the authoritative in-memory snapshot is durable and returns it only when balanced; an open live turn rejects rather than receiving synthetic interruption boundaries. HMR adopts a live prefix without closing its active turn.
 
-`SessionPersistence.inspect(id)` constructs an immutable logical Session without publishing it or writing recovery. Cold inspection balances an interrupted turn in memory while leaving torn physical tails untouched; inspection of an already-live Session borrows its current immutable snapshot and may therefore contain an open turn. Coordinator-backed implementations retain the exact cold unpublished Session in a bounded LRU, so repeated history reads and a later `prepare(id)` share one read, decompression, validation, freeze, and Session construction. `prepare(id)` reserves the Session, commits pending repair, and returns a disposable publication handle; `load(id)` uses the same machinery to commit repair without publication. The [Session preparation decision](../../.agents/notes/implemented/architecture/2026-08-05-session-preparation.md) owns this lifecycle.
+`SessionPersistence.inspect(id)` constructs an immutable logical Session without publishing it or writing recovery. Cold inspection balances an interrupted turn in memory while leaving torn physical tails untouched; inspection of an already-live Session borrows its current immutable snapshot and may therefore contain an open turn. A v0 header receives a v1 in-memory view for detached history only; `prepare(id)`, `load(id)`, and live adoption refuse it because it has no execution location. Coordinator-backed implementations retain the exact cold unpublished Session in a bounded LRU, so repeated history reads and a later eligible `prepare(id)` share one read, decompression, validation, freeze, and Session construction. `prepare(id)` reserves an eligible Session, commits pending repair, and returns a disposable publication handle; `load(id)` uses the same machinery to commit repair without publication. The [Session preparation decision](../../.agents/notes/implemented/architecture/2026-08-05-session-preparation.md) owns this lifecycle.
 
 ## `SessionLocation` — optional per-session artifact target
 
@@ -40,7 +40,7 @@ interface SessionLocation {
 
 ## `SessionHeader` — metadata beside the log
 
-Per-session metadata travels **separately** from the event log: format version, cwd, lineage, and the seed boundary are storage concerns, not conversation events, so they stay out of `SessionEventMap` and never reach `deriveMessages()`. The header is attached to a `Session` via `session.header`.
+Per-session metadata travels **separately** from the event log: format version, execution location, cwd, lineage, and the seed boundary are storage concerns, not conversation events, so they stay out of `SessionEventMap` and never reach `deriveMessages()`. The header is attached to a `Session` via `session.header`.
 
 Source: [`packages/core/session/src/types.ts`](../../packages/core/session/src/types.ts)
 
@@ -51,8 +51,8 @@ Source: [`packages/core/session/src/types.ts`](../../packages/core/session/src/t
 interface SessionHeader {
   /**
    * On-disk format version, stamped from {@link SESSION_FORMAT_VERSION} when the
-   * session is created. A persistence backend rejects any other version on load
-   * (no migration — see the constant).
+   * session is created. A v0 header is available only to detached history reads;
+   * a persistence backend rejects it before live execution (see the constant).
    */
   readonly version: number
   /** The session's id (mirrors the {@link Session}'s id). */
@@ -61,6 +61,13 @@ interface SessionHeader {
   readonly createdAt: number
   /** Absolute working directory the session was created in (if any). */
   readonly cwd?: string
+  /**
+   * The immutable execution location the session was created in (if any). A
+   * remote session carries its world here; `cwd` continues to hold the
+   * canonical absolute directory within that world. A header without this
+   * field (the pre-v1 format) is interpreted as the local world at `cwd`.
+   */
+  readonly executionLocation?: ExecutionLocation
   /** The session this one was forked from (seed lineage), if any. */
   readonly parentSession?: SessionId
   /**
@@ -91,11 +98,11 @@ interface SessionHeader {
 
 ## Format refusal — logs a build cannot faithfully read
 
-A backend refuses a log it cannot faithfully interpret with `SessionFormatUnsupportedError`, distinct from `SessionPersistenceCorruptionError` because nothing is damaged. A header `version` ahead of `SESSION_FORMAT_VERSION` names the direction ("written by a newer harness — upgrade the harness to open it"); one behind it states that this build ships no upgrade path. After legacy-shape normalization, an event type outside this build's generated vocabulary (`KNOWN_SESSION_EVENT_TYPES`, emitted by `gen-persistence-catalog`) refuses the same way unless the event's envelope carries `ignorable: true` — silently skipping an unrecognized required event could change how the rest of the log must be read. The message appends the raw log path when the backend keeps one artifact per session, so the refused text stays reachable. The JSONL backend refuses a foreign version straight from the raw header line, before validating today's header shape or decoding any event row — a structurally different future format still reports the upgrade direction, never "corrupt"; SQLite gates whole-file structure through its own `SCHEMA_VERSION` pragma first. Design rationale and the deferred upgrader chain live in the [session-log-version-mechanism note](../../.agents/notes/implemented/architecture/2026-08-10-session-log-version-mechanism.md).
+A backend refuses a log it cannot faithfully interpret with `SessionFormatUnsupportedError`, distinct from `SessionPersistenceCorruptionError` because nothing is damaged. A header `version` ahead of `SESSION_FORMAT_VERSION` names the direction ("written by a newer harness — upgrade the harness to open it"). A v0 header is the one older exception: `inspect` and `readFrom` return a v1 in-memory history view without changing its artifact, while `prepare`, `load`, adoption, and append refuse it because it records no execution location. Another older version states that this build ships no upgrade path. After legacy-shape normalization, an event type outside this build's generated vocabulary (`KNOWN_SESSION_EVENT_TYPES`, emitted by `gen-persistence-catalog`) refuses the same way unless the event's envelope carries `ignorable: true` — silently skipping an unrecognized required event could change how the rest of the log must be read. The message appends the raw log path when the backend keeps one artifact per session, so the refused text stays reachable. The JSONL backend admits a v0 header for history but refuses another foreign version straight from the raw header line, before validating today's header shape or decoding any event row — a structurally different future format still reports the upgrade direction, never "corrupt"; SQLite gates whole-file structure through its own `SCHEMA_VERSION` pragma first. Design rationale and the deferred upgrader chain live in the [session-log-version-mechanism note](../../.agents/notes/implemented/architecture/2026-08-10-session-log-version-mechanism.md).
 
 ## `CreateSessionOptions` — seeding and metadata
 
-Creating a `Session` through the store takes a `seed` (initial replay or fork history) and `meta` (the storage-level fields the store folds into a `SessionHeader`). The store fills in `version`/`id` and defaults `createdAt`; the caller may supply the validated absolute `cwd`, the `parentSession` lineage, the `seedLength` seed boundary, the optional coarse `origin`, the `delegationDepth`, the `agentPreset` the agent was composed from, and an existing `createdAt`. `origin: 'subagent'` lets product navigation hide duplicate child rows; it does not prove that a descriptor is valid or that the child can resume.
+Creating a `Session` through the store takes a `seed` (initial replay or fork history) and `meta` (the storage-level fields the store folds into a `SessionHeader`). The store fills in `version`/`id` and defaults `createdAt`; the caller may supply the validated absolute `cwd`, `executionLocation`, `parentSession` lineage, `seedLength` seed boundary, optional coarse `origin`, `delegationDepth`, `agentPreset` the agent was composed from, and an existing `createdAt`. `origin: 'subagent'` lets product navigation hide duplicate child rows; it does not prove that a descriptor is valid or that the child can resume.
 
 ```ts type-equiv
 /**
@@ -112,6 +119,7 @@ interface CreateSessionOptions {
    */
   readonly meta?: {
     readonly cwd?: string
+    readonly executionLocation?: ExecutionLocation
     readonly parentSession?: SessionId
     readonly createdAt?: number
     readonly seedLength?: number
@@ -299,8 +307,10 @@ abstract append(id: SessionId, events: readonly SessionEvent[]): Promise<void>
  * Prepare the exact unpublished Session used by resume. Implementations may
  * reuse object graphs retained by an earlier {@link inspect} after confirming
  * their durable revision is still current; disposal releases an unpublished
- * reservation. Revision retries require the durable log to remain unchanged
- * for one read/check round trip; continuous external writers may delay completion.
+ * reservation. A v0 artifact is available only through detached history
+ * reads because it records no execution location; preparation rejects it.
+ * Revision retries require the durable log to remain unchanged for one
+ * read/check round trip; continuous external writers may delay completion.
  * @param id - persisted session to prepare.
  * @param signal - optional cancellation for preparation work.
  * @returns one owned unpublished Session preparation.
@@ -311,12 +321,14 @@ async prepare(id: SessionId, signal?: AbortSignal): Promise<SessionPreparation>
  * Load an immutable balanced logical view and commit any required cold
  * recovery. A complete interrupted final turn is preserved and durably
  * closed with missing tool errors plus any open step and turn boundaries;
- * only a torn final record is discarded. Unknown versions and corruption in
- * the committed prefix reject. Implementations MUST NOT crash-repair an
- * identity still bound to a live Session: a balanced live log may return as a
- * durable snapshot, while an open live turn rejects. Returned values may be
- * shared with immutable live or prepared state and must not be mutated.
- * Revision-based implementations may wait for one stable read/check round trip.
+ * only a torn final record is discarded. A v0 artifact is history-only and
+ * rejects here because it cannot safely seed an execution. Other unsupported
+ * versions and corruption in the committed prefix also reject. Implementations
+ * MUST NOT crash-repair an identity still bound to a live Session: a balanced
+ * live log may return as a durable snapshot, while an open live turn rejects.
+ * Returned values may be shared with immutable live or prepared state and
+ * must not be mutated. Revision-based implementations may wait for one stable
+ * read/check round trip.
  * @param id - the persisted session to reload.
  * @returns the header and a log ending on a balanced `turn/end`.
  */
@@ -327,12 +339,14 @@ abstract load(id: SessionId): Promise<SessionInspection>
  * publishing it. A cold complete interrupted turn receives synthetic closers
  * in memory and a torn physical tail remains untouched. An already-live
  * Session instead yields its current immutable snapshot, which may contain an
- * open turn and its `session/end-seed` boundary. Coordinator-backed
- * implementations retain the exact cold unpublished Session for bounded
- * reuse by a later {@link prepare}. A stale ready source is reloaded; a source
- * already committing or reserved for resume remains exclusive, and inspection
- * may borrow its immutable view. Callers borrow only the immutable header and
- * log. Continuous external writers may delay revision convergence.
+ * open turn and its `session/end-seed` boundary. Inspection maps a v0 header
+ * to an in-memory current-format view for history without changing storage;
+ * {@link prepare} and {@link load} still reject that source. Coordinator-backed
+ * implementations retain the exact cold unpublished Session for bounded reuse
+ * by a later {@link prepare}. A stale ready source is reloaded; a source already
+ * committing or reserved for resume remains exclusive, and inspection may borrow
+ * its immutable view. Callers borrow only the immutable header and log.
+ * Continuous external writers may delay revision convergence.
  * @param id - the persisted session to inspect.
  * @param signal - optional cancellation for queued and backend read work.
  * @returns the validated header and current logical event log.
@@ -348,6 +362,8 @@ abstract inspect(id: SessionId, signal?: AbortSignal): Promise<SessionInspection
  * publication. Only events from the valid contiguous stored prefix are
  * returned, so a torn fragment never reaches the caller. `fromSeq` at or
  * beyond the stored prefix returns an empty event list (never an error).
+ * A v0 header maps to an in-memory current-format history view without
+ * changing storage; it remains unavailable to {@link prepare} and {@link load}.
  * Backends whose medium can seek by seq
  * (SQLite) read only the suffix; sequential media (JSONL, both encodings)
  * still parse the whole artifact and skip forward — the primitive bounds
@@ -381,5 +397,5 @@ abstract listSnapshots(signal?: AbortSignal): Promise<SessionPersistenceSnapshot
 
 Types: [SessionEvent](session.md) · [SessionId](core.md)
 
-Source: [`packages/session/session-persistence/src/index.ts:84`](../../packages/session/session-persistence/src/index.ts)
+Source: [`packages/session/session-persistence/src/index.ts:85`](../../packages/session/session-persistence/src/index.ts)
 <!-- END GENERATED cordis-surface -->

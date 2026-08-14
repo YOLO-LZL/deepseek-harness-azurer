@@ -1,7 +1,9 @@
 /**
  * Workspace entity registry (`ctx.workspaceRegistry`): durable workspace records,
  * stable registry order, and header-validated session membership over the
- * domain data form.
+ * domain data form. Workspaces live in execution worlds: a record carries its
+ * JSON-persistable execution location, and membership compares canonical
+ * locations (not host realpaths), so remote (SSH) workspaces are first-class.
  * @module @deepseek-ai/dsh-workspace
  */
 
@@ -9,11 +11,18 @@ import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
+import { ExecutionError, executionLocationEquals, localLocation } from '@deepseek-ai/dsh-execution-world'
+import type {
+  ExecutionJsonValue,
+  ExecutionLocation,
+  ExecutionWorldRegistry,
+} from '@deepseek-ai/dsh-execution-world'
 import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import type { DomainGlobal, KvTable } from '@deepseek-ai/dsh-storage-domain'
 import { WorkspaceEntity } from './entity.ts'
 import type { WorkspaceEntityHost } from './entity.ts'
+import { locationOfRecord } from './location.ts'
 
 export { WorkspaceMoveInvalidError } from './entity.ts'
 import { realpathNormalize } from './paths.ts'
@@ -25,6 +34,7 @@ export type { Workspace } from './types.ts'
 export { workspaceDomainState, workspaceRecord, workspaceDomainSpec } from './spec.ts'
 export type { WorkspaceDomainState, WorkspaceRecord } from './spec.ts'
 export { realpathNormalize } from './paths.ts'
+export { locationOfRecord } from './location.ts'
 
 /** Identifies one workspace record (see `src/types.ts` for the brand rationale). */
 export type WorkspaceId = WorkspaceIdBrand
@@ -37,6 +47,21 @@ export type WorkspaceId = WorkspaceIdBrand
 export function WorkspaceId(id: string): WorkspaceId {
   return id as WorkspaceId
 }
+
+/**
+ * A workspace create request. `local` names a host directory (the pre-provider
+ * shape); `provider` names a target in a registered execution world whose
+ * provider validates the target and path strictly. The generic RPC schema
+ * bounds JSON depth/size; the provider performs the business validation.
+ */
+export type WorkspaceCreateInput =
+  | { readonly kind: 'local'; readonly path: string }
+  | {
+    readonly kind: 'provider'
+    readonly providerId: string
+    readonly target: ExecutionJsonValue
+    readonly path: string
+  }
 
 /**
  * An archiveSession request named a session neither live nor in session
@@ -71,9 +96,9 @@ declare module '@deepseek-ai/cordis' {
 }
 
 interface BootstrapGroup {
-  readonly path: string
+  readonly location: ExecutionLocation
   readonly headers: SessionHeader[]
-  readonly newestAt: number
+  newestAt: number
 }
 
 const sameIds = (left: readonly WorkspaceId[], right: readonly WorkspaceId[]): boolean =>
@@ -83,11 +108,24 @@ const compareHeaders = (left: SessionHeader, right: SessionHeader): number =>
   right.createdAt - left.createdAt || String(left.id).localeCompare(String(right.id))
 
 /**
+ * Stable group key of one execution location: provider, JSON target, and root.
+ * This is the membership canon for both local and remote workspaces.
+ */
+function locationKey(location: ExecutionLocation): string {
+  return `${location.providerId}\u0000${JSON.stringify(location.target)}\u0000${location.root}`
+}
+
+/**
  * Durable workspace registry. Startup waits for `sessionPersistence`, builds
- * one canonical-cwd header index, and completes the one-time history
+ * one canonical-location header index, and completes the one-time history
  * bootstrap before the service becomes active. The persistence dependency is
  * mandatory so an unavailable peer can never be mistaken for an empty
  * history and commit the initialized marker.
+ *
+ * The registry delegates workspace-provider operations (canonicalize,
+ * validate/status, list, create, ensureSessionRoot, location resolution) to
+ * the execution-world registry when one is mounted; without it, local
+ * create/resolve fall back to this package's original realpath/stat path.
  */
 export class WorkspaceRegistry extends Service {
   static inject = ['storageDomain', 'sessionPersistence']
@@ -97,17 +135,18 @@ export class WorkspaceRegistry extends Service {
   private state?: WorkspaceDomainState
   private readonly entities = new Map<WorkspaceId, WorkspaceEntity>()
   private readonly headers = new Map<SessionId, SessionHeader>()
-  private readonly sessionPaths = new Map<SessionId, string>()
-  private readonly invalidSessionPaths = new Map<SessionId, string>()
+  private readonly sessionLocations = new Map<SessionId, ExecutionLocation>()
+  private readonly invalidSessionLocations = new Map<SessionId, string>()
   private operationTail: Promise<void> = Promise.resolve()
 
   private readonly host: WorkspaceEntityHost = {
     table: () => this.requireTable(),
-    sessionPath: id => this.sessionPaths.get(id),
+    sessionLocation: id => this.sessionLocations.get(id),
     readSessionHeader: id => this.readSessionHeader(id),
-    rememberSessionPath: (id, path) => {
-      this.sessionPaths.set(id, path)
-      this.invalidSessionPaths.delete(id)
+    canonicalizeLocation: header => this.canonicalizeLocation(header),
+    rememberSessionLocation: (id, location) => {
+      this.sessionLocations.set(id, location)
+      this.invalidSessionLocations.delete(id)
     },
   }
 
@@ -140,13 +179,14 @@ export class WorkspaceRegistry extends Service {
   }
 
   /**
-   * Create or reuse a workspace for an existing directory. The path is
-   * canonicalized through `fs.realpath`; a nonexistent path rejects with the
-   * original error and a non-directory rejects. Repeated calls for the same
-   * canonical path return the existing entity without changing its title.
-   * A newly created workspace is prepended to the durable registry order.
-   * Different canonical paths may share a display title.
-   * @param path - Existing directory to own, in any path spelling.
+   * Create or reuse a workspace. The input names either a host directory
+   * (`kind: 'local'`) or a target in a registered execution world
+   * (`kind: 'provider'`); the owning workspace provider canonicalizes and
+   * validates the location. A nonexistent path rejects; repeated calls for
+   * the same canonical location return the existing entity without changing
+   * its title. A newly created workspace is prepended to the durable
+   * registry order. Different canonical locations may share a display title.
+   * @param input - Discriminated create request (local path or provider target).
    * @param title - Display title used only when a new record is created.
    * @returns the existing or newly durable workspace.
    */
@@ -155,12 +195,9 @@ export class WorkspaceRegistry extends Service {
   // (.agents/notes/implemented/simplification/2026-07-31-one-route-to-add-a-workspace.md);
   // drop the parameter with its @param clause and the `create(path, title?)`
   // lines in this package's README pair.
-  async create(path: string, title?: string): Promise<Workspace> {
-    const canonical = await realpathNormalize(path)
-    if (!(await stat(canonical)).isDirectory()) {
-      throw new Error(`cannot create a workspace at '${canonical}': path is not a directory`)
-    }
-    return await this.enqueueOperation(() => this.createCanonical(canonical, title))
+  async create(input: WorkspaceCreateInput, title?: string): Promise<Workspace> {
+    const location = await this.resolveCreateLocation(input)
+    return await this.enqueueOperation(() => this.createCanonical(location, title))
   }
 
   /**
@@ -175,7 +212,8 @@ export class WorkspaceRegistry extends Service {
   /**
    * Synchronous workspace projection in durable registry order. Every
    * entity's `sessionIds` getter is already filtered by the startup/live
-   * canonical-cwd header index; this method performs no persistence reads.
+   * canonical-location header index; this method performs no persistence
+   * reads.
    * @returns a fresh ordered array of workspace entities.
    */
   list(): Workspace[] {
@@ -269,35 +307,87 @@ export class WorkspaceRegistry extends Service {
 
   /**
    * Resolve by canonical directory path without creating or mutating a
-   * workspace. A missing path rejects during `realpath`; an existing unowned
-   * directory returns `undefined`.
+   * workspace. Only local workspaces are addressable by host path: the path
+   * is canonicalized through the local provider (or this package's fallback)
+   * and matched against local records.
    * @param path - Existing directory path in any spelling.
    * @returns the workspace owning the canonical path, when one exists.
    */
   async resolveByPath(path: string): Promise<Workspace | undefined> {
-    const canonical = await realpathNormalize(path)
+    const location = await this.resolveLocalPathLocation(path)
     for (const entity of this.entities.values()) {
-      if (entity.path === canonical) return entity
+      if (executionLocationEquals(entity.location, location)) return entity
     }
     return undefined
   }
 
-  private async createCanonical(canonical: string, title?: string): Promise<WorkspaceEntity> {
+  /**
+   * Resolve by execution location without creating or mutating a workspace.
+   * Remote (SSH) workspaces are only addressable this way — their directories
+   * are not host paths. The location must match a record canonically.
+   * @param location - the execution location to match.
+   * @returns the workspace owning the location, when one exists.
+   */
+  resolveByLocation(location: ExecutionLocation): Workspace | undefined {
     for (const entity of this.entities.values()) {
-      if (entity.path === canonical) return entity
+      if (executionLocationEquals(entity.location, location)) return entity
+    }
+    return undefined
+  }
+
+  /** Canonicalize a host path into a local execution location (provider or fallback). */
+  private async resolveLocalPathLocation(path: string): Promise<ExecutionLocation> {
+    const worlds = this.executionWorlds()
+    if (worlds !== undefined) {
+      return await worlds.workspaceOf('local').resolveLocation({
+        providerId: 'local',
+        target: null,
+        path,
+      })
+    }
+    const canonical = await realpathNormalize(path)
+    if (!(await stat(canonical)).isDirectory()) {
+      throw new Error(`cannot resolve a workspace at '${canonical}': path is not a directory`)
+    }
+    return localLocation(canonical)
+  }
+
+  /** Validate and canonicalize a create input through the owning workspace provider. */
+  private async resolveCreateLocation(input: WorkspaceCreateInput): Promise<ExecutionLocation> {
+    const worlds = this.executionWorlds()
+    if (worlds === undefined) {
+      if (input.kind !== 'local') {
+        throw new ExecutionError(
+          'no execution-world registry is mounted; remote workspace creation is unavailable',
+          'execution-provider-not-found',
+        )
+      }
+      return await this.resolveLocalPathLocation(input.path)
+    }
+    const providerInput = input.kind === 'local'
+      ? { providerId: 'local', target: null as ExecutionJsonValue, path: input.path }
+      : { providerId: input.providerId, target: input.target, path: input.path }
+    const ops = worlds.workspaceOf(providerInput.providerId)
+    return await ops.resolveLocation(providerInput)
+  }
+
+  private async createCanonical(location: ExecutionLocation, title?: string): Promise<WorkspaceEntity> {
+    for (const entity of this.entities.values()) {
+      if (executionLocationEquals(entity.location, location)) return entity
     }
 
-    const workspaceName = title ?? basename(canonical)
+    const workspaceName = title ?? basename(location.root)
     const table = this.requireTable()
     const state = this.requireState()
     const id = WorkspaceId(randomUUID())
     const now = new Date().toISOString()
     const record: WorkspaceRecord = {
-      path: canonical,
+      path: location.root,
       title: workspaceName,
       sessionIds: [],
       createdAt: now,
       updatedAt: now,
+      location,
     }
     const entity = new WorkspaceEntity(this.host, id, record)
     this.entities.set(id, entity)
@@ -426,30 +516,34 @@ export class WorkspaceRegistry extends Service {
   private async bootstrap(headers: readonly SessionHeader[]): Promise<void> {
     const table = this.requireTable()
     const state = this.requireState()
-    const groupsByPath = new Map<string, SessionHeader[]>()
+    const groupsByLocation = new Map<string, BootstrapGroup>()
     for (const header of headers) {
-      const path = this.sessionPaths.get(header.id)
-      if (path === undefined) continue
-      const group = groupsByPath.get(path)
-      if (group === undefined) groupsByPath.set(path, [header])
-      else group.push(header)
+      const location = this.sessionLocations.get(header.id)
+      if (location === undefined) continue
+      const key = locationKey(location)
+      const group = groupsByLocation.get(key)
+      if (group === undefined) groupsByLocation.set(key, { location, headers: [header], newestAt: header.createdAt })
+      else {
+        group.headers.push(header)
+        if (header.createdAt > group.newestAt) group.newestAt = header.createdAt
+      }
     }
-    const groups: BootstrapGroup[] = [...groupsByPath].map(([path, groupHeaders]) => {
-      groupHeaders.sort(compareHeaders)
-      const newest = groupHeaders[0] as SessionHeader
-      return { path, headers: groupHeaders, newestAt: newest.createdAt }
+    const groups: BootstrapGroup[] = [...groupsByLocation.values()].map((group) => {
+      group.headers.sort(compareHeaders)
+      return group
     }).sort((left, right) =>
-      right.newestAt - left.newestAt || left.path.localeCompare(right.path))
+      right.newestAt - left.newestAt || left.location.root.localeCompare(right.location.root))
 
-    const byPath = new Map<string, WorkspaceId>()
+    const byLocation = new Map<string, WorkspaceId>()
     const accounted = new Map<SessionId, WorkspaceId>()
     for (const [id, record] of table.entries()) {
-      byPath.set(record.path, id)
+      byLocation.set(locationKey(locationOfRecord(record)), id)
       for (const sessionId of record.sessionIds) accounted.set(sessionId, id)
     }
 
     for (const group of groups) {
-      let id = byPath.get(group.path)
+      const key = locationKey(group.location)
+      let id = byLocation.get(key)
       if (id === undefined) {
         const sessionIds = group.headers
           .map(header => header.id)
@@ -458,14 +552,15 @@ export class WorkspaceRegistry extends Service {
         id = WorkspaceId(randomUUID())
         const createdAt = new Date(group.newestAt).toISOString()
         const record: WorkspaceRecord = {
-          path: group.path,
-          title: basename(group.path),
+          path: group.location.root,
+          title: basename(group.location.root),
           sessionIds,
           createdAt,
           updatedAt: createdAt,
+          location: group.location,
         }
         await table.put(id, record)
-        byPath.set(group.path, id)
+        byLocation.set(key, id)
         for (const sessionId of sessionIds) accounted.set(sessionId, id)
         continue
       }
@@ -488,12 +583,12 @@ export class WorkspaceRegistry extends Service {
       for (const sessionId of historical) accounted.set(sessionId, id)
     }
 
-    const groupRank = new Map(groups.map(group => [group.path, group.newestAt]))
+    const groupRank = new Map(groups.map(group => [locationKey(group.location), group.newestAt]))
     const priorRank = new Map(state.workspaceIds.map((id, index) => [id, index]))
     const workspaceIds = [...table.entries()]
       .sort(([leftId, left], [rightId, right]) => {
-        const leftTime = groupRank.get(left.path) ?? Date.parse(left.createdAt)
-        const rightTime = groupRank.get(right.path) ?? Date.parse(right.createdAt)
+        const leftTime = groupRank.get(locationKey(locationOfRecord(left))) ?? Date.parse(left.createdAt)
+        const rightTime = groupRank.get(locationKey(locationOfRecord(right))) ?? Date.parse(right.createdAt)
         return rightTime - leftTime
           || (priorRank.get(leftId) ?? Number.MAX_SAFE_INTEGER)
             - (priorRank.get(rightId) ?? Number.MAX_SAFE_INTEGER)
@@ -526,17 +621,18 @@ export class WorkspaceRegistry extends Service {
       )
     }
 
-    const paths = new Map<string, WorkspaceId>()
+    const locations = new Map<string, WorkspaceId>()
     const accounted = new Map<SessionId, WorkspaceId>()
     for (const [id, record] of table.entries()) {
-      const pathHolder = paths.get(record.path)
-      if (pathHolder !== undefined) {
+      const key = locationKey(locationOfRecord(record))
+      const locationHolder = locations.get(key)
+      if (locationHolder !== undefined) {
         throw new Error(
-          `workspace domain is inconsistent: path '${record.path}' is claimed `
-          + `by both workspace '${pathHolder}' and workspace '${id}'`,
+          `workspace domain is inconsistent: execution location '${record.path}' is claimed `
+          + `by both workspace '${locationHolder}' and workspace '${id}'`,
         )
       }
-      paths.set(record.path, id)
+      locations.set(key, id)
       for (const sessionId of record.sessionIds) {
         const holder = accounted.get(sessionId)
         if (holder !== undefined) {
@@ -560,8 +656,8 @@ export class WorkspaceRegistry extends Service {
 
   private async replaceHeaderIndex(headers: readonly SessionHeader[]): Promise<void> {
     this.headers.clear()
-    this.sessionPaths.clear()
-    this.invalidSessionPaths.clear()
+    this.sessionLocations.clear()
+    this.invalidSessionLocations.clear()
     await this.indexHeaders(headers)
   }
 
@@ -571,22 +667,66 @@ export class WorkspaceRegistry extends Service {
 
   private async indexHeader(header: SessionHeader): Promise<void> {
     this.headers.set(header.id, header)
-    this.sessionPaths.delete(header.id)
+    this.sessionLocations.delete(header.id)
+    if (header.executionLocation !== undefined) {
+      try {
+        const location = await this.canonicalizeLocation(header)
+        this.sessionLocations.set(header.id, location)
+        this.invalidSessionLocations.delete(header.id)
+      } catch (error) {
+        this.invalidSessionLocations.set(
+          header.id,
+          `execution location for provider '${header.executionLocation.providerId}' does not resolve: ${String(error)}`,
+        )
+      }
+      return
+    }
     if (header.cwd === undefined) {
-      this.invalidSessionPaths.set(header.id, 'header has no cwd')
+      this.invalidSessionLocations.set(header.id, 'header has no cwd or execution location')
       return
     }
     try {
       const path = await realpathNormalize(header.cwd)
       if (!(await stat(path)).isDirectory()) {
-        this.invalidSessionPaths.set(header.id, `cwd '${header.cwd}' is not a directory`)
+        this.invalidSessionLocations.set(header.id, `cwd '${header.cwd}' is not a directory`)
         return
       }
-      this.sessionPaths.set(header.id, path)
-      this.invalidSessionPaths.delete(header.id)
+      this.sessionLocations.set(header.id, localLocation(path))
+      this.invalidSessionLocations.delete(header.id)
     } catch {
-      this.invalidSessionPaths.set(header.id, `cwd '${header.cwd}' does not resolve`)
+      this.invalidSessionLocations.set(header.id, `cwd '${header.cwd}' does not resolve`)
     }
+  }
+
+  /**
+   * Canonicalize one header into its canonical execution location: the
+   * persisted location canonicalized by its provider when present, else the
+   * local interpretation of `cwd` (the pre-location format).
+   * @param header - the session header to canonicalize.
+   * @returns the canonical location; rejects when the world cannot serve or
+   *   the directory does not exist.
+   */
+  private async canonicalizeLocation(header: SessionHeader): Promise<ExecutionLocation> {
+    if (header.executionLocation !== undefined) {
+      const worlds = this.executionWorlds()
+      if (worlds === undefined) {
+        throw new ExecutionError(
+          `cannot canonicalize session '${header.id}': no execution-world registry is mounted`,
+          'execution-provider-not-found',
+        )
+      }
+      const ops = worlds.workspace(header.executionLocation)
+      const root = await ops.canonicalize(header.executionLocation, header.executionLocation.root)
+      return { ...header.executionLocation, root }
+    }
+    if (header.cwd === undefined) {
+      throw new Error(`session '${header.id}' header carries no cwd or execution location`)
+    }
+    const cwd = await realpathNormalize(header.cwd)
+    if (!(await stat(cwd)).isDirectory()) {
+      throw new Error(`cwd '${header.cwd}' is not a directory`)
+    }
+    return localLocation(cwd)
   }
 
   private async indexLiveSessions(): Promise<void> {
@@ -599,11 +739,11 @@ export class WorkspaceRegistry extends Service {
     for (const entity of this.entities.values()) {
       const record = this.requireTable().get(entity.id) as WorkspaceRecord
       for (const sessionId of record.sessionIds) {
-        const path = this.sessionPaths.get(sessionId)
-        if (path === record.path) continue
-        const reason = this.invalidSessionPaths.get(sessionId)
+        const location = this.sessionLocations.get(sessionId)
+        if (location !== undefined && executionLocationEquals(location, entity.location)) continue
+        const reason = this.invalidSessionLocations.get(sessionId)
           ?? (this.headers.has(sessionId)
-            ? `canonical cwd '${path}' differs from workspace path '${record.path}'`
+            ? `canonical location '${location === undefined ? '(unresolved)' : location.root}' differs from workspace location '${record.path}'`
             : 'session header is missing')
         this.ctx.logger.warn(
           `workspace '${entity.id}' filtered session '${sessionId}' from membership: ${reason}`,
@@ -628,6 +768,12 @@ export class WorkspaceRegistry extends Service {
       throw new Error(`cannot validate session '${id}': session persistence holds no such session`)
     }
     return header
+  }
+
+  /** The mounted execution-world registry, when this deployment has one. */
+  private executionWorlds(): ExecutionWorldRegistry | undefined {
+    return (this.ctx.get as unknown as (service: string) => unknown)('executionWorlds') as
+      ExecutionWorldRegistry | undefined
   }
 
   private requireTable(): KvTable<WorkspaceId, WorkspaceRecord> {

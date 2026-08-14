@@ -14,6 +14,8 @@ import { delimiter, extname, isAbsolute, resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import * as nodePty from 'node-pty'
 import type { IPtyForkOptions } from 'node-pty'
+import { ExecutionError } from '@deepseek-ai/dsh-execution-location'
+import type { ExecutionLocation } from '@deepseek-ai/dsh-execution-location'
 import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type {
   SubprocessHandle,
@@ -105,9 +107,11 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     command: string,
     env?: Readonly<Record<string, string>>,
     signal?: AbortSignal,
+    world?: ExecutionLocation,
   ): Promise<string> {
     if (command.length === 0) throw new Error('subprocess-local: executable must be non-empty')
     signal?.throwIfAborted()
+    this.assertLocalWorld(world, 'resolveExecutable')
     const environment = childEnv(env)
     const absolute = isAbsolute(command)
     if (!absolute && (command.includes('/') || (process.platform === 'win32' && command.includes('\\')))) {
@@ -115,7 +119,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
         `subprocess-local: command ${JSON.stringify(command)} is a relative path; use an absolute path or a bare PATH name`,
       )
     }
-    const candidates = absolute ? [command] : this.executableCandidates(command, environment)
+    const candidates = absolute ? [command] : this.executableCandidates(command, environment, world)
     for (const candidate of candidates) {
       signal?.throwIfAborted()
       try {
@@ -134,13 +138,33 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
       : `subprocess-local: command ${JSON.stringify(command)} was not found on PATH`)
   }
 
-  private executableCandidates(command: string, env: NodeJS.ProcessEnv): string[] {
+  private executableCandidates(command: string, env: NodeJS.ProcessEnv, world?: ExecutionLocation): string[] {
     const path = environmentValue(env, 'PATH') ?? ''
     const extensions = process.platform === 'win32' && extname(command) === ''
       ? (environmentValue(env, 'PATHEXT') ?? '.COM;.EXE;.BAT;.CMD').split(';')
       : ['']
+    // Relative PATH entries anchor at the world root when one is named, else
+    // the host process cwd (the pre-world behavior).
+    const base = world?.root ?? process.cwd()
     return path.split(delimiter).flatMap(directory =>
-      extensions.map(extension => resolve(process.cwd(), directory, command + extension)))
+      extensions.map(extension => resolve(base, directory, command + extension)))
+  }
+
+  /** A world-carrying call must name the local world; the local backend never serves another. */
+  private assertLocalWorld(world: ExecutionLocation | undefined, operation: string): void {
+    if (world === undefined) return
+    if (world.providerId !== 'local') {
+      throw new ExecutionError(
+        `subprocess-local cannot ${operation} for provider '${world.providerId}' — the routing layer selected the wrong backend`,
+        'execution-provider-not-found',
+      )
+    }
+    if (world.target !== null) {
+      throw new ExecutionError(
+        `subprocess-local expects target null, got ${JSON.stringify(world.target)}`,
+        'workspace-provider-invalid-target',
+      )
+    }
   }
 
   spawn(spec: SubprocessSpawnSpec): SubprocessHandle {

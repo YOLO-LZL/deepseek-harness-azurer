@@ -19,6 +19,9 @@
       "path": "../../util/output-retention"
     },
     {
+      "path": "../../execution/execution-world"
+    },
+    {
       "path": "../../llm/llm"
     },
     {

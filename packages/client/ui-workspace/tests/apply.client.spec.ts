@@ -107,26 +107,30 @@ describe('ui-workspace apply', () => {
     expect(b.rename).toHaveBeenCalledWith('ws', 'renamed')
     await browser.insertSessionBefore('ws' as never, 's1' as never, 's2' as never)
     expect(b.insertSessionBefore).toHaveBeenCalledWith('ws', 's1', 's2')
-    await browser.createWorkspace({ path: '/tmp/browser-project' })
-    expect(b.create).toHaveBeenCalledWith({ path: '/tmp/browser-project' })
+    await browser.createWorkspace({ kind: 'local', path: '/tmp/browser-project' })
+    expect(b.create).toHaveBeenCalledWith({ kind: 'local', path: '/tmp/browser-project' })
 
     const picker = (b.slots.entries('conversation.hero.workspace')[0]!.inject as () => WorkspacePickerInjected)()
-    await picker.createWorkspace({ path: '/tmp/project' })
-    expect(b.create).toHaveBeenCalledWith({ path: '/tmp/project' })
+    await picker.createWorkspace({ kind: 'local', path: '/tmp/project' })
+    expect(b.create).toHaveBeenCalledWith({ kind: 'local', path: '/tmp/project' })
   })
 
-  it('declares the two directory-flow holes and reports their occupancy per surface', async () => {
+  it('declares surface-local directory-flow and create-method holes, and reports occupancy per surface', async () => {
     const b = await bench()
     declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace')
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     // Registration declared the child holes (declaration = render authorization).
     expect(b.slots.spec('sidebar.workspaces.directoryFlow')).toMatchObject({ kind: 'single' })
     expect(b.slots.spec('conversation.hero.workspace.directoryFlow')).toMatchObject({ kind: 'single' })
+    expect(b.slots.spec('sidebar.workspaces.createMethod')).toMatchObject({ kind: 'list' })
+    expect(b.slots.spec('conversation.hero.workspace.createMethod')).toMatchObject({ kind: 'list' })
 
     const browser = (b.slots.entries('sidebar.workspaces')[0]!.inject as () => WorkspaceBrowserInjected)()
     const picker = (b.slots.entries('conversation.hero.workspace')[0]!.inject as () => WorkspacePickerInjected)()
     expect(browser.hooks.directoryFlow.getSnapshot()).toBe(false)
     expect(picker.hooks.directoryFlow.getSnapshot()).toBe(false)
+    expect(browser.hooks.createMethods.getSnapshot()).toEqual([])
+    expect(picker.hooks.createMethods.getSnapshot()).toEqual([])
     // A flow occupant flips exactly its own surface, and the source notifies.
     const notified = vi.fn()
     const unsubscribe = browser.hooks.directoryFlow.subscribe(notified)
@@ -138,6 +142,13 @@ describe('ui-workspace apply', () => {
     dispose()
     expect(browser.hooks.directoryFlow.getSnapshot()).toBe(false)
     unsubscribe()
+
+    const disposeMethod = b.slots.register({
+      name: 'sidebar.workspaces.createMethod', id: 'ssh', label: 'SSH',
+    } as never, () => null)
+    expect(browser.hooks.createMethods.getSnapshot()).toEqual([{ id: 'ssh', label: 'SSH' }])
+    expect(picker.hooks.createMethods.getSnapshot()).toEqual([])
+    disposeMethod()
   })
 
   it('rejects the browser search callback on a runtime business error', async () => {

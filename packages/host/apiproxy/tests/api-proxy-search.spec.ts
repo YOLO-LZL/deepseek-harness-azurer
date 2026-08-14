@@ -35,7 +35,7 @@ function request(query: string): RpcRequest<{ query: string }> {
 
 function header(id: string, cwd: string | null = '/project'): SessionHeader {
   return {
-    version: 0,
+    version: 1,
     id: sid(id),
     createdAt: 100,
     ...(cwd === null ? {} : { cwd }),

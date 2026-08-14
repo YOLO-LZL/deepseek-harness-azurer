@@ -17,15 +17,18 @@ import { errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
 import { isAppendSurfaceEvent, isJsonValue } from '@deepseek-ai/dsh-session'
 import type { JsonValue, Session, SessionEvent, SessionEventMap, SessionHeader, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
+import type { SshConfigHost } from '@deepseek-ai/dsh-ssh'
+import type { ExecutionLocation, WorkspaceProviderOperations } from '@deepseek-ai/dsh-execution-location'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import { SessionQueryError, type SessionSearchCursor } from '@deepseek-ai/dsh-session-query'
 import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import type { SubagentListEntry as CatalogSubagentListEntry } from '@deepseek-ai/dsh-subagent'
 import { isUserInvocable } from '@deepseek-ai/dsh-skill'
-import type { Workspace, WorkspaceRecord } from '@deepseek-ai/dsh-workspace'
+import type { Workspace, WorkspaceRecord, WorkspaceCreateInput } from '@deepseek-ai/dsh-workspace'
 import {
   workspaceDomainState, workspaceRecord, WorkspaceId as brandWorkspaceId,
   WorkspaceMoveInvalidError, WorkspaceOrderInvalidError, WorkspaceUnknownSessionError,
+  locationOfRecord,
 } from '@deepseek-ai/dsh-workspace'
 // Type-only: brings the `ctx.tools` Context merge into this program (viewFor reads presenters).
 import {
@@ -1077,6 +1080,7 @@ function workspaceView(workspace: Workspace): WorkspaceView {
   return {
     workspaceId: workspace.id,
     path: workspace.path,
+    location: workspace.location,
     title: workspace.title,
     sessionIds: [...workspace.sessionIds],
     createdAt: workspace.createdAt,
@@ -1090,6 +1094,7 @@ function changedWorkspaceView(workspaceId: string, value: unknown): WorkspaceVie
   return {
     workspaceId: workspaceId as WorkspaceId,
     path: record.path,
+    location: locationOfRecord(record),
     title: record.title,
     sessionIds: [...record.sessionIds],
     createdAt: record.createdAt,
@@ -1662,7 +1667,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
 
         try {
-          await mkdir(cwd, { recursive: true })
+          await ensureWorkspaceDirectory(cwd)
         } catch (error: unknown) {
           throw new Error(`failed to ensure project directory "${cwd}": ${String(error)}`, { cause: error })
         }
@@ -1672,6 +1677,10 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           agentOptions: agentOptions(),
           meta: {
             cwd,
+            // A session inside a remote (SSH) workspace persists its execution
+            // location in the header; the workspace provider owns directory
+            // creation there (see ensureWorkspaceDirectory).
+            ...workspaceLocationFor(cwd) !== undefined ? { executionLocation: workspaceLocationFor(cwd) } : {},
             ...composition.agentPreset === undefined ? {} : { agentPreset: composition.agentPreset },
           },
           setup: composition.setup,
@@ -1707,14 +1716,91 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   }
 
   /** Resolve or create one path while holding the Host's workspace-create chain. */
-  function ensureWorkspace(path: string): Promise<{ workspace: Workspace; created: boolean }> {
+  function ensureWorkspace(input: WorkspaceCreateInput): Promise<{ workspace: Workspace; created: boolean }> {
     const operation = workspaceCreationChain.then(async () => {
-      const existing = await ctx.workspaceRegistry.resolveByPath(path)
-      if (existing !== undefined) return { workspace: existing, created: false }
-      return { workspace: await ctx.workspaceRegistry.create(path), created: true }
+      if (input.kind === 'local') {
+        const existing = await ctx.workspaceRegistry.resolveByPath(input.path)
+        if (existing !== undefined) return { workspace: existing, created: false }
+      }
+      return { workspace: await ctx.workspaceRegistry.create(input), created: true }
     })
     workspaceCreationChain = operation.then(() => undefined, () => undefined)
     return operation
+  }
+
+  /** The workspace owning one session cwd (by record path), when one exists. */
+  function workspaceForCwd(cwd: string): Workspace | undefined {
+    return ctx.workspaceRegistry.list().find(workspace => workspace.path === cwd)
+  }
+
+  /** The execution location of the workspace owning one session cwd, when remote. */
+  function workspaceLocationFor(cwd: string): Workspace['location'] | undefined {
+    const location = workspaceForCwd(cwd)?.location
+    return location !== undefined && location.providerId !== 'local' ? location : undefined
+  }
+
+  /** The execution-world registry, when mounted. */
+  function executionWorldsOf(ctx: Context): {
+    workspace(location: ExecutionLocation): WorkspaceProviderOperations
+  } {
+    const worlds = (ctx.get as unknown as (service: string) => unknown)('executionWorlds') as
+      | { workspace(location: ExecutionLocation): WorkspaceProviderOperations }
+      | undefined
+    if (worlds === undefined) throw new Error('no execution-world registry is mounted')
+    return worlds
+  }
+
+  /**
+   * Run one ssh directory operation against a saved connection or config
+   * alias; failures fold into a stable execution code with the remote message.
+   */
+  async function sshDirectoryOperation<T>(
+    request: RpcRequest<{ connectionId?: string; alias?: string; path: string }>,
+    operation: (location: ExecutionLocation) => Promise<T>,
+  ): Promise<RpcResponse<T>> {
+    const { connectionId, alias } = request.payload
+    const target: ExecutionLocation['target'] = connectionId !== undefined
+      ? { kind: 'connection', connectionId }
+      : { kind: 'config', alias: alias as string }
+    const location: ExecutionLocation = {
+      providerId: 'ssh',
+      target,
+      root: '/',
+    }
+    try {
+      return ok(request, await operation(location))
+    } catch (error: unknown) {
+      const execution = error as { code?: string }
+      const code = execution.code === 'workspace-provider-invalid-target'
+        || execution.code === 'workspace-remote-path-invalid'
+        ? execution.code
+        : 'execution-unavailable'
+      return err(request, {
+        code,
+        message: error instanceof Error ? error.message : String(error),
+        details: { path: request.payload.path },
+      })
+    }
+  }
+
+  /**
+   * Ensure the session's working directory exists in its execution world. The
+   * workspace provider owns directory creation for remote worlds; local
+   * directories keep the historical host mkdir.
+   */
+  async function ensureWorkspaceDirectory(cwd: string): Promise<void> {
+    const location = workspaceLocationFor(cwd)
+    if (location === undefined) {
+      await mkdir(cwd, { recursive: true })
+      return
+    }
+    const worlds = (ctx.get as unknown as (service: string) => unknown)('executionWorlds') as
+      | { workspace(location: Workspace['location']): { createDirectory(location: Workspace['location'], path: string): Promise<void> } }
+      | undefined
+    if (worlds === undefined) {
+      throw new Error(`cannot ensure remote directory "${cwd}": no execution-world registry is mounted`)
+    }
+    await worlds.workspace(location).createDirectory(location, location.root)
   }
 
   /**
@@ -2808,14 +2894,26 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       },
 
       async create(request) {
-        const { path } = request.payload
+        const input = request.payload
+        const path = input.path
         try {
-          const { workspace, created } = await ensureWorkspace(path)
+          const { workspace, created } = await ensureWorkspace(input)
           return ok(request, { workspace: workspaceView(workspace), created })
         } catch (error: unknown) {
           // The registry rejects a path that does not resolve to an existing
           // directory (realpath ENOENT / not-a-directory) — the business
           // error of the typed-path flow, surfaced as a validation failure.
+          // Remote refusals keep their execution-world codes.
+          const execution = error as { code?: string }
+          if (execution.code === 'workspace-provider-invalid-target'
+            || execution.code === 'workspace-remote-path-invalid'
+            || execution.code === 'execution-provider-not-found') {
+            return err(request, {
+              code: execution.code,
+              message: `cannot create a workspace at "${path}": ${error instanceof Error ? error.message : String(error)}`,
+              details: { path },
+            })
+          }
           return err(request, {
             code: 'workspace-invalid-path',
             message: `cannot create a workspace at "${path}": ${error instanceof Error ? error.message : String(error)}`,
@@ -3007,6 +3105,42 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
 
       async openPath(request, signal) {
         return openPath(request, request.payload.path, signal)
+      },
+
+      async sshStatus(request) {
+        const ssh = (ctx.get as unknown as (service: string) => unknown)('ssh') as
+          | { sshAvailable(): Promise<boolean>; listConfigHosts(): Promise<SshConfigHost[]> }
+          | undefined
+        if (ssh === undefined) {
+          return ok(request, { available: false, configHosts: [] })
+        }
+        const [available, configHosts] = await Promise.all([ssh.sshAvailable(), ssh.listConfigHosts()])
+        return ok(request, { available, configHosts })
+      },
+
+      async sshListDirectory(request) {
+        return sshDirectoryOperation(request, async (location) => {
+          const worlds = executionWorldsOf(ctx)
+          const entries = await worlds.workspace(location).listDirectory(location, request.payload.path)
+          return { entries }
+        })
+      },
+
+      async sshCreateDirectory(request) {
+        return sshDirectoryOperation(request, async (location) => {
+          const worlds = executionWorldsOf(ctx)
+          const { path, name } = request.payload
+          const target = `${path.replace(/\/+$/, '')}/${name}`
+          await worlds.workspace(location).createDirectory(location, target)
+          return { path: target }
+        })
+      },
+
+      async sshProbe(request) {
+        return sshDirectoryOperation(request, async (location) => {
+          const worlds = executionWorldsOf(ctx)
+          return await worlds.workspace(location).status(location)
+        })
       },
     },
 

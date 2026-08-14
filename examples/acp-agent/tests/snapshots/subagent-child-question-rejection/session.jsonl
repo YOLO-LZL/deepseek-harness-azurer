@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"44444444-4444-4444-8444-444444444444","createdAt":2000,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"44444444-4444-4444-8444-444444444444","createdAt":2000,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1786173701174,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Delegate one question check. Ask the child to call ask_user_question once about the CUDA fallback and return any unresolved question in its final result."}],"source":{"kind":"user"},"role":"user","id":"851bea02-2961-471a-84ec-3b068c451db0"}]}}
 {"type":"turn/start","seq":1,"time":1786173701175,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1786173701175,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

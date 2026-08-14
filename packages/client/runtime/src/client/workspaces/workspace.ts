@@ -3,12 +3,24 @@
 import type {
   IApiClient, RpcResult, WorkspaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ExecutionJsonValue } from '@deepseek-ai/dsh-execution-location'
 import { transportError } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type { ObservableSnapshot } from '../contract/store.ts'
 import { Notifier } from '../sessions/notifier.ts'
 
-/** Host input retained by a local Workspace until materialization succeeds. */
-export type WorkspaceCreateInput = { path: string }
+/**
+ * Host input retained by a local Workspace until materialization succeeds.
+ * A local host-directory adoption (`kind: 'local'`) or a target in a
+ * registered execution world (`kind: 'provider'`, e.g. an SSH connection).
+ */
+export type WorkspaceCreateInput =
+  | { readonly kind: 'local'; readonly path: string }
+  | {
+    readonly kind: 'provider'
+    readonly providerId: string
+    readonly target: ExecutionJsonValue
+    readonly path: string
+  }
 
 /** Observable state of a client-local Workspace intent. */
 export interface WorkspaceIntentSnapshot {

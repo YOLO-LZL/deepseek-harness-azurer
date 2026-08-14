@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"{{parent}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"{{parent}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":0,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Run the advanced packaged-runtime snapshot scenario."}],"source":{"kind":"user"},"role":"user","id":"{{messageId}}"}]}}
 {"type":"turn/start","seq":1,"time":0,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":0,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

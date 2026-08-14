@@ -758,15 +758,17 @@ export function WorkspaceBrowser({
   searchSessions,
   searchResultLimit,
   useDirectoryFlow,
+  useCreateMethods,
   renderSlot,
   t,
 }: WorkspaceBrowserProps) {
   const workspaces = useWorkspaces(state => state.items)
   const workspacePhase = useWorkspaces(state => state.phase)
   const archivedSessionIds = useWorkspaces(state => state.archivedSessionIds)
-  // Live occupancy of this surface's directory-flow hole (the same source the
-  // flow reads): a composition without a picking affordance can add nothing.
+  // Live creation-method availability for this surface. A composition can
+  // offer the local directory flow, a provider method, or both.
   const directoryFlowAvailable = useDirectoryFlow(occupied => occupied)
+  const createMethodAvailable = useCreateMethods(entries => entries.length > 0)
   const groupBy = useStore(s => s.groupBy)
   const orderBy = useStore(s => s.orderBy)
   const groupExpansion = useStore(s => s.groupExpansion)
@@ -1048,9 +1050,9 @@ export function WorkspaceBrowser({
             />
           )}
           {/* Adding is the button's one action, so a composition with no
-              picking affordance has nothing to offer here: the region hides the
+              creation method has nothing to offer here: the region hides the
               button rather than leaving a dead one in the header. */}
-          {directoryFlowAvailable && (
+          {(directoryFlowAvailable || createMethodAvailable) && (
             <Tooltip label={t('workspace.add')} side="bottom" delayMs={500}>
               <button
                 ref={wsPlusRef}
@@ -1075,6 +1077,8 @@ export function WorkspaceBrowser({
           createWorkspace={createWorkspace}
           useDirectoryFlow={useDirectoryFlow}
           renderDirectoryFlow={owner => renderSlot('sidebar.workspaces.directoryFlow', owner)}
+          useCreateMethods={useCreateMethods}
+          renderCreateMethod={(id, owner) => renderSlot('sidebar.workspaces.createMethod', owner, { only: id })}
           addOnly
           side="right"
           onPick={(workspaceId) => {

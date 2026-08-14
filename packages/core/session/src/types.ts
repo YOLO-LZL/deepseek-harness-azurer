@@ -1,4 +1,5 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { ExecutionLocation } from '@deepseek-ai/dsh-execution-location'
 import type {
   AssistantMessage,
   CallId,
@@ -32,10 +33,17 @@ export function SessionId(id: string): SessionId {
 
 /**
  * The on-disk session format version, stamped into every newly-written {@link SessionHeader}
- * and enforced by every persistence backend on load. The single source of truth for the
- * version — write sites and the load-time check all read it.
- * While the harness is unreleased it is pinned at `0`: no compatibility is
- * implied, incompatible logs are rejected, and no migration is provided.
+ * and enforced by every persistence backend where a stored log enters live execution.
+ * The single source of truth for the version — write sites and the load-time check all
+ * read it.
+ * While the harness is unreleased, no compatibility is implied: incompatible
+ * logs are rejected, and no migration is provided.
+ *
+ * v1 added the immutable {@link SessionHeader.executionLocation} field — the
+ * structural change that makes remote (SSH) sessions first-class. A persistence
+ * backend may expose a v0 log through detached history reads by projecting its
+ * header to v1 in memory, but it never resumes, loads, or adopts that log for
+ * append: v0 records no execution location and must not be reinterpreted as local.
  *
  * The version is a single monotonic integer with no major/minor split. Whether
  * a bump is needed is decided by what the WRITER emits, never by what a newer
@@ -53,7 +61,7 @@ export function SessionId(id: string): SessionId {
  * recorded in the session-log-version-mechanism Agent Note
  * (`.agents/notes/implemented/architecture/2026-08-10-session-log-version-mechanism.md`).
  */
-export const SESSION_FORMAT_VERSION = 0
+export const SESSION_FORMAT_VERSION = 1
 
 /**
  * Immutable validated storage metadata, kept outside the conversation event log.
@@ -61,8 +69,8 @@ export const SESSION_FORMAT_VERSION = 0
 export interface SessionHeader {
   /**
    * On-disk format version, stamped from {@link SESSION_FORMAT_VERSION} when the
-   * session is created. A persistence backend rejects any other version on load
-   * (no migration — see the constant).
+   * session is created. A v0 header is available only to detached history reads;
+   * a persistence backend rejects it before live execution (see the constant).
    */
   readonly version: number
   /** The session's id (mirrors the {@link Session}'s id). */
@@ -71,6 +79,13 @@ export interface SessionHeader {
   readonly createdAt: number
   /** Absolute working directory the session was created in (if any). */
   readonly cwd?: string
+  /**
+   * The immutable execution location the session was created in (if any). A
+   * remote session carries its world here; `cwd` continues to hold the
+   * canonical absolute directory within that world. A header without this
+   * field (the pre-v1 format) is interpreted as the local world at `cwd`.
+   */
+  readonly executionLocation?: ExecutionLocation
   /** The session this one was forked from (seed lineage), if any. */
   readonly parentSession?: SessionId
   /**
@@ -112,6 +127,7 @@ export interface CreateSessionOptions {
    */
   readonly meta?: {
     readonly cwd?: string
+    readonly executionLocation?: ExecutionLocation
     readonly parentSession?: SessionId
     readonly createdAt?: number
     readonly seedLength?: number

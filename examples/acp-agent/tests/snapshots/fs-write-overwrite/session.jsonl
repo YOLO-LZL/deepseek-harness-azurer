@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"e04cc262-6c89-4586-88d7-3e919240d735","createdAt":1783352092215,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"e04cc262-6c89-4586-88d7-3e919240d735","createdAt":1783352092215,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498782591,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"First use the read tool to read data.txt in the current directory. Then use the write tool (NOT bash) to replace its entire contents with exactly the single line: replaced. Then reply with exactly the single word DONE."}],"source":{"kind":"user"},"role":"user","id":"e1697ae3-3d38-4492-9dad-5115f056934a"}]}}
 {"type":"turn/start","seq":1,"time":1785821390865,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821390865,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

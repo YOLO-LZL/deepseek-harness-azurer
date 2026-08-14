@@ -30,6 +30,12 @@
       "path": "../../util/brand"
     },
     {
+      "path": "../../execution/execution-location"
+    },
+    {
+      "path": "../../ssh/ssh"
+    },
+    {
       "path": "../../attachment/attachment"
     },
     {

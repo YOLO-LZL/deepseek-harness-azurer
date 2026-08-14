@@ -23,7 +23,7 @@ async function mounted(config: { mode?: 'read-only' | 'workspace-write' | 'dange
 function session(id: string, cwd?: string): Session {
   const sessionId = SessionId(id)
   return Session.create(sessionId, undefined, {
-    version: 0,
+    version: 1,
     id: sessionId,
     createdAt: 0,
     ...cwd === undefined ? {} : { cwd },

@@ -159,6 +159,18 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async openPath(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { opened: true as const } } }
       },
+      async sshStatus(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { available: false, configHosts: [] } } }
+      },
+      async sshListDirectory(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { entries: [] } } }
+      },
+      async sshCreateDirectory(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { path: '/w/new' } } }
+      },
+      async sshProbe(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { kind: 'ok' as const } } }
+      },
     },
     workspace: {
       async list(request) {
@@ -167,13 +179,13 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async create(request) {
         return {
           rpcId: request.rpcId,
-          result: { ok: true, value: { workspace: { workspaceId: 'w1' as never, path: '/w', title: 'w', sessionIds: [], createdAt: 't', updatedAt: 't' }, created: true } },
+          result: { ok: true, value: { workspace: { workspaceId: 'w1' as never, path: '/w', title: 'w', location: { providerId: 'local', target: null, root: '/w' }, sessionIds: [], createdAt: 't', updatedAt: 't' }, created: true } },
         }
       },
       async rename(request) {
         return {
           rpcId: request.rpcId,
-          result: { ok: true, value: { workspace: { workspaceId: 'w1' as never, path: '/w', title: 'w', sessionIds: [], createdAt: 't', updatedAt: 't' } } },
+          result: { ok: true, value: { workspace: { workspaceId: 'w1' as never, path: '/w', title: 'w', location: { providerId: 'local', target: null, root: '/w' }, sessionIds: [], createdAt: 't', updatedAt: 't' } } },
         }
       },
       async delete(request) {
@@ -185,7 +197,7 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async insertSessionBefore(request) {
         return {
           rpcId: request.rpcId,
-          result: { ok: true, value: { workspace: { workspaceId: 'w1' as never, path: '/w', title: 'w', sessionIds: [], createdAt: 't', updatedAt: 't' } } },
+          result: { ok: true, value: { workspace: { workspaceId: 'w1' as never, path: '/w', title: 'w', location: { providerId: 'local', target: null, root: '/w' }, sessionIds: [], createdAt: 't', updatedAt: 't' } } },
         }
       },
       async archiveSession(request) {

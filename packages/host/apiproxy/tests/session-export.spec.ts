@@ -20,7 +20,7 @@ const sid = (id: string): SessionId => id as SessionId
 
 function header(id: string, parentSession?: SessionId): SessionHeader {
   return {
-    version: 0,
+    version: 1,
     id: sid(id),
     createdAt: 1000,
     cwd: '/proj',
@@ -33,7 +33,7 @@ function artifact(id: string, parentSession?: SessionId, content?: string): Sess
   return {
     meta: header(id, parentSession),
     filename: 'session.jsonl',
-    content: content ?? `{"type":"session","version":0,"id":"${id}","createdAt":1000}\n{"type":"turn/start","seq":0,"time":2000,"data":{"turn":1}}\n`,
+    content: content ?? `{"type":"session","version":1,"id":"${id}","createdAt":1000}\n{"type":"turn/start","seq":0,"time":2000,"data":{"turn":1}}\n`,
   }
 }
 
@@ -535,7 +535,7 @@ describe('session.export download endpoint', () => {
       reportAttachmentStarted = resolve
     })
     const root = artifact('session-root', undefined, [
-      '{"type":"session","version":0,"id":"session-root","createdAt":1000}',
+      '{"type":"session","version":1,"id":"session-root","createdAt":1000}',
       imageEventLine('slow-img'),
     ].join('\n') + '\n')
     const api = await buildApi({ 'session-root': root }, [], {
@@ -606,7 +606,7 @@ describe('session.export download endpoint', () => {
 
   it('includes media objects referenced by the root log under media/<id>.<ext>', async () => {
     const root = artifact('session-root', undefined, [
-      '{"type":"session","version":0,"id":"session-root","createdAt":1000}',
+      '{"type":"session","version":1,"id":"session-root","createdAt":1000}',
       imageEventLine('img-1'),
     ].join('\n') + '\n')
     const api = await buildApi({ 'session-root': root })
@@ -622,7 +622,7 @@ describe('session.export download endpoint', () => {
   it('collects media referenced from nested tool results', async () => {
     const nested = '{"type":"assistant/message","seq":2,"time":2000,"data":{"content":[{"type":"tool-result","content":[{"type":"image","attachment":{"attachmentId":"nested-1","mediaType":"image/webp","bytes":4,"width":2,"height":2}}]}]}}'
     const root = artifact('session-root', undefined, [
-      '{"type":"session","version":0,"id":"session-root","createdAt":1000}',
+      '{"type":"session","version":1,"id":"session-root","createdAt":1000}',
       nested,
     ].join('\n') + '\n')
     const api = await buildApi({ 'session-root': root })
@@ -640,7 +640,7 @@ describe('session.export download endpoint', () => {
     const inserted = `{"type":"context/inserted","seq":3,"time":3000,"data":{"inserted":[{"content":[${block('inserted-1', 'image/gif')}]}]}}`
     const chunk = `{"type":"assistant/chunk","seq":4,"time":4000,"data":{"chunk":{"type":"block-end","block":${block('chunk-1', 'image/png')}}}}`
     const root = artifact('session-root', undefined, [
-      '{"type":"session","version":0,"id":"session-root","createdAt":1000}',
+      '{"type":"session","version":1,"id":"session-root","createdAt":1000}',
       wrapped,
       inserted,
       chunk,
@@ -661,11 +661,11 @@ describe('session.export download endpoint', () => {
   it('deduplicates one media object referenced by several included logs', async () => {
     const line = imageEventLine('shared-img')
     const root = artifact('session-root', undefined, [
-      '{"type":"session","version":0,"id":"session-root","createdAt":1000}',
+      '{"type":"session","version":1,"id":"session-root","createdAt":1000}',
       line,
     ].join('\n') + '\n')
     const child = artifact('child-a', sid('session-root'), [
-      '{"type":"session","version":0,"id":"child-a","createdAt":1000}',
+      '{"type":"session","version":1,"id":"child-a","createdAt":1000}',
       line,
     ].join('\n') + '\n')
     const api = await buildApi({ 'session-root': root, 'child-a': child }, [node('child-a')])
@@ -679,7 +679,7 @@ describe('session.export download endpoint', () => {
 
   it('includes descendant media only when descendants are requested', async () => {
     const child = artifact('child-a', sid('session-root'), [
-      '{"type":"session","version":0,"id":"child-a","createdAt":1000}',
+      '{"type":"session","version":1,"id":"child-a","createdAt":1000}',
       imageEventLine('child-img'),
     ].join('\n') + '\n')
     const api = await buildApi({ 'session-root': artifact('session-root'), 'child-a': child }, [node('child-a')])
@@ -699,7 +699,7 @@ describe('session.export download endpoint', () => {
 
   it('fails the whole export when a referenced image cannot be read', async () => {
     const root = artifact('session-root', undefined, [
-      '{"type":"session","version":0,"id":"session-root","createdAt":1000}',
+      '{"type":"session","version":1,"id":"session-root","createdAt":1000}',
       imageEventLine('gone-img'),
     ].join('\n') + '\n')
     const api = await buildApi({ 'session-root': root }, [], {

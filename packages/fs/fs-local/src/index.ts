@@ -9,6 +9,8 @@ import { constants as bufferConstants } from 'node:buffer'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import z from '@deepseek-ai/schemastery'
+import { ExecutionError } from '@deepseek-ai/dsh-execution-location'
+import type { ExecutionLocation } from '@deepseek-ai/dsh-execution-location'
 import { FileSystem, FsError, FsVersion } from '@deepseek-ai/dsh-fs'
 import type {
   FsDirEntry,
@@ -103,9 +105,14 @@ export class LocalFileSystem extends FileSystem {
     }
   }
 
-  override async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {
+  override async resolve(
+    path: string,
+    opts?: { cwd?: string; signal?: AbortSignal; world?: ExecutionLocation },
+  ): Promise<FsTarget> {
     if (opts?.signal?.aborted) throw new FsError('resolve aborted', 'FS_ABORTED')
-    const local = await resolveLocalTarget(opts?.cwd ?? this.config.cwd, path)
+    this.assertLocalWorld(opts?.world, 'resolve')
+    const base = opts?.cwd ?? opts?.world?.root ?? this.config.cwd
+    const local = await resolveLocalTarget(base, path)
     if (opts?.signal?.aborted) throw new FsError('resolve aborted', 'FS_ABORTED')
     return { targetKey: local.targetKey, displayPath: local.displayPath }
   }
@@ -131,13 +138,36 @@ export class LocalFileSystem extends FileSystem {
     return { version: info.version, type: info.type, size: info.size }
   }
 
-  override async lstat(path: string, opts?: { cwd?: string }, signal?: AbortSignal): Promise<FsPathInfo | undefined> {
+  override async lstat(
+    path: string,
+    opts?: { cwd?: string; world?: ExecutionLocation },
+    signal?: AbortSignal,
+  ): Promise<FsPathInfo | undefined> {
     if (signal?.aborted) throw new FsError('lstat aborted', 'FS_ABORTED')
     if (path.trim().length === 0) throw new FsError('file_path must be a non-empty string', 'FS_NOT_FOUND')
-    const info = await probeNoFollow(resolve(opts?.cwd ?? this.config.cwd, path))
+    this.assertLocalWorld(opts?.world, 'lstat')
+    const base = opts?.cwd ?? opts?.world?.root ?? this.config.cwd
+    const info = await probeNoFollow(resolve(base, path))
     if (signal?.aborted) throw new FsError('lstat aborted', 'FS_ABORTED')
     if (!info) return undefined
     return { version: info.version, type: info.type, size: info.size }
+  }
+
+  /** A world-carrying call must name the local world; the local backend never serves another. */
+  private assertLocalWorld(world: ExecutionLocation | undefined, operation: string): void {
+    if (world === undefined) return
+    if (world.providerId !== 'local') {
+      throw new ExecutionError(
+        `fs-local cannot ${operation} for provider '${world.providerId}' — the routing layer selected the wrong backend`,
+        'execution-provider-not-found',
+      )
+    }
+    if (world.target !== null) {
+      throw new ExecutionError(
+        `fs-local expects target null, got ${JSON.stringify(world.target)}`,
+        'workspace-provider-invalid-target',
+      )
+    }
   }
 
   override async readText(target: FsTarget, signal?: AbortSignal): Promise<string> {

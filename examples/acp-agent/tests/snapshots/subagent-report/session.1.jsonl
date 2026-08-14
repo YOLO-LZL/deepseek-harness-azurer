@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"33333333-3333-4333-8333-333333333333","createdAt":1789000001000,"cwd":"{{cwd}}","parentSession":"11111111-1111-4111-8111-111111111111","origin":"subagent","delegationDepth":1}
+{"type":"session","version":1,"id":"33333333-3333-4333-8333-333333333333","createdAt":1789000001000,"cwd":"{{cwd}}","parentSession":"11111111-1111-4111-8111-111111111111","origin":"subagent","delegationDepth":1}
 {"type":"subagent/descriptor","seq":0,"time":1785594881508,"data":{"version":2,"mode":"continuable","provider":"spawn","label":"Report a finding","agentProvider":"deepseek-official","agentModel":"deepseek-v4-flash"}}
 {"type":"session/end-seed","seq":1,"time":1785594881508,"data":{}}
 {"type":"approval/policy","seq":2,"time":1786374158805,"data":{"policy":"never","source":"delegation"}}

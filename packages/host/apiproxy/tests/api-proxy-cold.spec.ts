@@ -35,7 +35,7 @@ function request<P>(payload: P): RpcRequest<P> {
 }
 
 function header(id: string, createdAt: number, extra: Partial<SessionHeader> = {}): SessionHeader {
-  return { version: 0, id: sid(id), createdAt, cwd: '/proj', ...extra }
+  return { version: 1, id: sid(id), createdAt, cwd: '/proj', ...extra }
 }
 
 describe('sessions.list cold merge', () => {
@@ -265,6 +265,48 @@ describe('attached updatedAt tracks human prompts', () => {
 })
 
 describe('cold history recovery view', () => {
+  it('serves a v0 log as detached history without making it resumable', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(UserQuestionService)
+    const sessionId = sid('session-v0-history')
+    const meta = header(sessionId, 1000, { version: 0 })
+    const events: SessionEvent[] = [
+      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+      { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'completed' } } },
+    ]
+    const stored: StoredPrefix<never> = {
+      meta,
+      events,
+      revision: SessionPersistenceRevision('v0-history-test:1'),
+    }
+    const backend: PersistenceBackend<never> = {
+      name: 'v0-history-test',
+      loadStored: id => Promise.resolve(id === sessionId ? structuredClone(stored) : undefined),
+      readStoredRevision: id => Promise.resolve(
+        id === sessionId ? SessionPersistenceRevision('v0-history-test:1') : undefined,
+      ),
+      appendBatch: () => Promise.resolve(),
+      commitRepair: () => Promise.resolve(),
+      list: () => Promise.resolve([structuredClone(meta)]),
+    }
+    const coordinator = new PersistenceCoordinator(ctx, backend)
+    ctx.provide('sessionPersistence', {
+      list: (signal?: AbortSignal) => backend.list(signal),
+      inspect: (id: SessionId, signal?: AbortSignal) => coordinator.inspect(id, signal),
+      locate: () => undefined,
+    } as never)
+    const api = createApiProxy(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+
+    const history = await api.sessions.history(request({ sessionId }))
+    expect(history.result).toMatchObject({ ok: true })
+    if (history.result.ok) {
+      expect(history.result.value.events.map(entry => entry.event.type)).toEqual(['turn/start', 'turn/end'])
+    }
+    expect(ctx.sessions.get(sessionId)).toBeUndefined()
+    await ctx.fiber.dispose()
+  })
+
   it('shows in-memory interruption repair without activating the session', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)

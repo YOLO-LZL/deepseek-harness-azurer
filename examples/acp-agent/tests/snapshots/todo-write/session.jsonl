@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"d9d967e8-0112-471c-a3b5-dfdc171aba61","createdAt":1785987077399,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"d9d967e8-0112-471c-a3b5-dfdc171aba61","createdAt":1785987077399,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785987077401,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Use the todo_write tool to record a plan with exactly three todos for work running in parallel: \"read the code\" (in_progress), \"watch the background build\" (in_progress), \"write the fix\" (pending). Send all three in one todo_write call. Then reply with the single word DONE and stop."}],"source":{"kind":"user"},"role":"user","id":"befb10e9-f992-4a19-9e1b-333ad7fd72f8"}]}}
 {"type":"turn/start","seq":1,"time":1785987077401,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785987077401,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

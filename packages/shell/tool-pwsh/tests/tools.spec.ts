@@ -237,7 +237,7 @@ function sandboxAgent(
     ...ctx === undefined ? {} : { ctx: ctx.plugin(() => {}).ctx },
     session: {
       id,
-      header: { version: 0, id, createdAt: 0 },
+      header: { version: 1, id, createdAt: 0 },
       events,
       append: (type: string, data: Record<string, unknown>) => {
         const event = { type, data }
@@ -261,7 +261,7 @@ function registerFakeAgent(ctx: Context, sessionId: string): Agent {
   const agent = {
     id,
     ctx: scopeFiber.ctx,
-    session: { id, header: { version: 0, id, createdAt: 0 }, events: [] },
+    session: { id, header: { version: 1, id, createdAt: 0 }, events: [] },
   } as unknown as Agent
   ctx.agents.register(agent)
   return agent

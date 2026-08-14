@@ -24,8 +24,10 @@ import { ESCALATION_TARGETS, approveEscalation, canonicalPath, validateEscalatio
 import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
 import { DSH_ENV_PREFIX } from '@deepseek-ai/dsh-shell'
 import type { ShellRunResult } from '@deepseek-ai/dsh-shell'
+import { sessionWorld } from '@deepseek-ai/dsh-execution-world/consumer'
 import { processOutcome } from './background.ts'
 import { parseExitStatus, renderProcessRead, renderResult } from './render.ts'
+import { runRemoteBash, startRemoteBash } from './remote-run.ts'
 
 export const name = 'tool-bash'
 export const inject = ['tools', 'shell', 'systemPrompt', 'shellEnv']
@@ -339,6 +341,56 @@ export function apply(ctx: Context, config: Config = {}): void {
         : { ...(standingPolicy as SandboxExecutionPolicy), mode: approvedMode }
       const workdir = resolveWorkdir(args.workdir, exec, standingPolicy?.workspaceRoot)
       const dshEnv = ctx.shellEnv.collect(exec)
+      // Remote (SSH) sessions run bash inside their execution world; the host
+      // shell executor only serves local sessions.
+      const remoteWorld = sessionWorld(ctx, exec.agent?.session.header)
+      const isRemote = remoteWorld !== undefined
+        && remoteWorld.subprocess !== undefined
+        && remoteWorld.location.providerId !== 'local'
+      const remoteRequest = {
+        command: args.command,
+        ...workdir !== undefined ? { workdir } : {},
+        ...args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {},
+        env: dshEnv,
+        ...policy !== undefined ? { sandboxPolicy: policy } : {},
+      }
+      if (isRemote) {
+        if (args.run_in_background === true) {
+          if (!backgroundEnabled) {
+            throw new Error('run_in_background is disabled for this deployment (enableRunInBackground: false)')
+          }
+          const jobs = ctx.get('jobs')
+          if (jobs === undefined) {
+            throw new Error('background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs')
+          }
+          if (exec.signal.aborted) {
+            const error = new HarnessError('tool call aborted', TOOL_ABORTED)
+            error.name = 'AbortError'
+            throw error
+          }
+          const id = jobs.start({
+            kind: 'bash',
+            label: args.command,
+            ...exec.agent ? { owner: exec.agent } : {},
+            run: () => {
+              const proc = startRemoteBash(ctx, exec, remoteRequest, { stdoutMaxBytes: 65536, stderrMaxBytes: 65536 })
+              return {
+                cancel: () => void proc.kill(),
+                done: proc.done.then(() => processOutcome(proc)),
+                readOutput: () => renderProcessRead(proc.readOutput(), undefined, escalationModes),
+              }
+            },
+          })
+          return { kind: 'background' as const, jobId: id }
+        }
+        const result = await runRemoteBash(ctx, exec, remoteRequest, { stdoutMaxBytes: 65536, stderrMaxBytes: 65536 })
+        if (result.aborted) {
+          const error = new HarnessError('tool call aborted', TOOL_ABORTED)
+          error.name = 'AbortError'
+          throw error
+        }
+        return { kind: 'foreground' as const, ...canonicalBashResult(result) }
+      }
       const request = {
         command: args.command,
         ...workdir !== undefined ? { workdir } : {},

@@ -8,6 +8,7 @@
  * client half (see the contract module doc). Export discipline:
  * packages/client/AGENTS.md.
  */
+import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
@@ -20,7 +21,8 @@ import { en, zh, type WorkspaceKey } from './locales.ts'
 
 export type {
   DirectoryFlowOwnerProps, DirectoryFlowSlotName, DirectoryPickingHooks, DirectoryPickingInjected,
-  WorkspaceBrowserInjected, WorkspaceBrowserProps, WorkspacePickerInjected, WorkspacePickerProps,
+  WorkspaceBrowserInjected, WorkspaceBrowserProps, WorkspaceCreateMethodSlotName,
+  WorkspacePickerInjected, WorkspacePickerProps,
 } from './contract/slots.ts'
 export type { WorkspaceKey } from './locales.ts'
 
@@ -33,6 +35,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Dictionary namespace owned by this plugin. */
 const NS = 'workspace'
+const NO_CREATE_METHODS: readonly { id: string; label: string }[] = []
 
 /**
  * Required services (cordis fiber inject). The target slots are declared by
@@ -67,6 +70,39 @@ export function apply(ctx: ClientContext): void {
   })
   const browserFlowSource = flowSource('sidebar.workspaces.directoryFlow')
   const pickerFlowSource = flowSource('conversation.hero.workspace.directoryFlow')
+  // Registered create methods beyond the built-in local flow, with their
+  // locale-bound labels (the segmented "本地 / SSH" control's entries).
+  const createMethodsSource = (hole: 'sidebar.workspaces.createMethod' | 'conversation.hero.workspace.createMethod'): HostObservable<readonly { id: string; label: string }[]> => {
+    let entriesCache: ReturnType<typeof ctx.slots.entries> | undefined
+    let localeCache: ReturnType<typeof ctx.locale.getSnapshot> | undefined
+    let snapshotCache: readonly { id: string; label: string }[] = NO_CREATE_METHODS
+    const getSnapshot = (): readonly { id: string; label: string }[] => {
+      const entries = ctx.slots.entries(hole)
+      const locale = ctx.locale.getSnapshot()
+      if (entries !== entriesCache || locale !== localeCache) {
+        entriesCache = entries
+        localeCache = locale
+        snapshotCache = entries.length === 0 ? NO_CREATE_METHODS : entries.map(entry => ({
+          id: entry.options.id ?? entry.options.key ?? 'method',
+          label: resolveSlotLabel(entry.options.label) ?? entry.options.id ?? 'method',
+        }))
+      }
+      return snapshotCache
+    }
+    return {
+      getSnapshot,
+      subscribe: (listener) => {
+        const disposeSlots = ctx.slots.subscribe(hole, listener)
+        const disposeLocale = ctx.locale.subscribe(listener)
+        return () => {
+          disposeSlots()
+          disposeLocale()
+        }
+      },
+    }
+  }
+  const browserCreateMethodsSource = createMethodsSource('sidebar.workspaces.createMethod')
+  const pickerCreateMethodsSource = createMethodsSource('conversation.hero.workspace.createMethod')
   const browserInjected = (): WorkspaceBrowserInjected => ({
     // Explicit group actions keep their target; unscoped New Session inherits
     // the current Session Workspace before the recent-Workspace fallback.
@@ -99,18 +135,21 @@ export function apply(ctx: ClientContext): void {
       await ctx.workspaces.insertSessionBefore(workspaceId, sessionId, beforeSessionId)
     },
     createWorkspace: input => ctx.workspaces.create(input),
-    hooks: { directoryFlow: browserFlowSource },
+    hooks: { directoryFlow: browserFlowSource, createMethods: browserCreateMethodsSource },
   })
   const pickerInjected = (): WorkspacePickerInjected => ({
     createWorkspace: input => ctx.workspaces.create(input),
-    hooks: { directoryFlow: pickerFlowSource },
+    hooks: { directoryFlow: pickerFlowSource, createMethods: pickerCreateMethodsSource },
   })
   // Each registration declares its directory-flow child in the same call;
   // slot injection follows both the owner and declaration HMR lifetimes.
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register(
     {
       name: 'sidebar.workspaces',
-      children: { 'sidebar.workspaces.directoryFlow': { kind: 'single', scope: 'root' } },
+      children: {
+        'sidebar.workspaces.directoryFlow': { kind: 'single', scope: 'root' },
+        'sidebar.workspaces.createMethod': { kind: 'list', scope: 'root' },
+      },
       store: createWorkspaceViewStore(),
       inject: browserInjected,
       locale: NS,
@@ -120,7 +159,10 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('conversation.hero.workspace', () => ctx.slots.register(
     {
       name: 'conversation.hero.workspace',
-      children: { 'conversation.hero.workspace.directoryFlow': { kind: 'single', scope: 'root' } },
+      children: {
+        'conversation.hero.workspace.directoryFlow': { kind: 'single', scope: 'root' },
+        'conversation.hero.workspace.createMethod': { kind: 'list', scope: 'root' },
+      },
       inject: pickerInjected,
       locale: NS,
     },

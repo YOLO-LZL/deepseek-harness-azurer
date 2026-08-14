@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"55555555-5555-4555-8555-555555555555","createdAt":1785304900000,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"55555555-5555-4555-8555-555555555555","createdAt":1785304900000,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785916902430,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Run true once with bash in the foreground. After that fails, run true with bash in the background, read task bash-1 with job_output and wait=true, then reply with exactly RUNNER_FAILURES_SURFACED and stop."}],"source":{"kind":"user"},"role":"user","id":"2d2f8e7a-f08a-464d-8e94-048d1d95717e"}]}}
 {"type":"turn/start","seq":1,"time":1785916902430,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785916902430,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

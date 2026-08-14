@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"11111111-1111-4111-8111-111111111111","createdAt":1789000000000,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"11111111-1111-4111-8111-111111111111","createdAt":1789000000000,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785730453561,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Follow these steps exactly, then stop. 1. Call the subagent tool once with run_in_background set to true, description 'Report a finding', and prompt 'Call the report tool once with output exactly CHILD_REPORT_OK, then stop.'. 2. Reply with the single word STARTED. Do not use the bash tool."}],"source":{"kind":"user"},"role":"user","id":"b765ae32-73e2-4625-81ba-01095f8c83d0"}]}}
 {"type":"turn/start","seq":1,"time":1785821411429,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821411429,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

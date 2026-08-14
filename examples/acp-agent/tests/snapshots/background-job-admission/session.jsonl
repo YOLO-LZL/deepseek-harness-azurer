@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"77777777-7777-4777-8777-777777777777","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"77777777-7777-4777-8777-777777777777","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1786434813544,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Start one background Bash task that stays alive. Immediately try to start a second background Bash task, observe the limit error, stop the first task by its returned job id, verify that second-task-ran.txt does not exist, then reply with exactly BOUNDED_BACKGROUND_TASKS and stop."}],"source":{"kind":"user"},"role":"user","id":"fca9abcd-66a9-4c79-ab34-7e25e65e01af"}]}}
 {"type":"turn/start","seq":1,"time":1786434813545,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1786434813546,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

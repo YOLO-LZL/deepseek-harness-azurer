@@ -128,7 +128,7 @@ function persistParkedTurnStart(): void {
   parkedTurnLog = join(sessionsRoot, 'ready', sessionId, 'session.jsonl')
   mkdirSync(dirname(parkedTurnLog), { recursive: true })
   writeFileSync(parkedTurnLog, [
-    JSON.stringify({ type: 'session', version: 0, id: sessionId, createdAt: 1, cwd: sessionCwd, delegationDepth: 0 }),
+    JSON.stringify({ type: 'session', version: 1, id: sessionId, createdAt: 1, cwd: sessionCwd, delegationDepth: 0 }),
     JSON.stringify({ type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } }),
     '',
   ].join('\n'))

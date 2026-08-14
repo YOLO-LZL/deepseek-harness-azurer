@@ -12,9 +12,18 @@ import type { TerminalBackend, TerminalBackendSpawnSpec } from '@deepseek-ai/dsh
 import type { SubprocessTerminalHandle, SubprocessTerminalSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import { effectiveSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import { sessionWorld } from '@deepseek-ai/dsh-execution-world/consumer'
 import { type Config, type ResolvedConfig, validateConfig } from './config.ts'
 import { LocalPtySession } from './session.ts'
 import { CONTROLLED_PROMPT } from './sanitize.ts'
+
+/** A remote terminal refused because the effective policy cannot confine it. */
+export class TerminalRemotePolicyError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'TerminalRemotePolicyError'
+  }
+}
 
 export { Config } from './config.ts'
 export type { Config as TerminalLocalConfig } from './config.ts'
@@ -120,6 +129,39 @@ export class BashTerminalBackend implements TerminalBackend {
     spec.signal?.throwIfAborted()
     ensureSandboxModeFence(this.ctx, spec.owner)
     const policy = this.ctx.sandboxPolicy.resolve({ session: spec.owner.session })
+    // Remote (SSH) sessions allocate their PTY inside the remote execution
+    // world; the host sandbox cannot confine a remote shell, so the policy
+    // gate is the same one the remote bash tool applies.
+    const remoteWorld = sessionWorld(this.ctx, spec.owner.session.header)
+    if (remoteWorld !== undefined && remoteWorld.subprocess !== undefined && remoteWorld.location.providerId !== 'local') {
+      if (policy.mode !== 'danger-full-access') {
+        throw new TerminalRemotePolicyError(
+          `remote terminal requires danger-full-access: the host sandbox cannot confine a remote shell under '${policy.mode}'`,
+        )
+      }
+      const terminal = await remoteWorld.subprocess.spawnTerminal({
+        argv: [this.config.shellPath, ...this.config.shellArgs],
+        cwd: spec.cwd ?? remoteWorld.location.root,
+        env: childEnvironment(spec),
+        rows: this.config.rows,
+        cols: this.config.cols,
+        graceMs: this.config.disposeGraceMs,
+        signal: spec.signal,
+        world: remoteWorld.location,
+      })
+      const session = this.createSession(terminal, this.config)
+      try {
+        await initializeSession(session, spec.signal)
+        return session
+      } catch (error) {
+        try {
+          await session.close('PTY startup failed')
+        } catch (closeError: unknown) {
+          throw new TerminalBackendCleanupError(error, closeError)
+        }
+        throw error
+      }
+    }
     const argv = spawnArgv(this.ctx, this.config, policy)
     if (argv[0] === undefined) throw new Error('terminal-bash: sandbox returned empty argv')
     const terminal = await this.spawnTerminal({

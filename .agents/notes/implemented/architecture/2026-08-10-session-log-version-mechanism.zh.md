@@ -14,13 +14,13 @@ Session log 在发布后必须能升级格式，而最先发布的运行时决�
 
 **升不升版本由写入方决定，与读取方能力无关。**当且仅当老运行时无法在语义上完全正确地处理新日志时才必须升版本。"解析不报错"不是标准：静默跳过影响重建的内容就是读错。只有结构性变更够得上这条线：header 形状、事件信封、核心事件语义、surface 机制（`SurfaceEventType` 集合、`SurfaceOp` 变体）。拿不准就升：近似恒等的升级器几乎没有成本，漏升一次会让老读取器静默读坏。
 
-**读取规则按方向区分。**版本相等：正常读。比读取器新：拒绝，说明方向（"由更新的 harness 写入，请升级"），并给出原始日志文件的路径，用户仍能看到文本（`SessionFormatUnsupportedError`，与 `SessionPersistenceCorruptionError` 区分，因为数据没有损坏）。比读取器旧：查看时经 n→n+1 升级器链在内存中逐级转换；只有会话真正被继续时才把转换落盘（临时文件原子替换，原文件留备份）。写不出升级器的那一步留空，这会切断该步及更早所有版本的升级路径，它们降级为只能看原文。
+**读取规则按方向区分。**版本相等：正常读。比读取器新：拒绝，说明方向（"由更新的 harness 写入，请升级"），并给出原始日志文件的路径，用户仍能看到文本（`SessionFormatUnsupportedError`，与 `SessionPersistenceCorruptionError` 区分，因为数据没有损坏）。更旧的每一步定义自己的读取规则。v0→v1 步骤只为独立的 `inspect` 与 `readFrom` 历史视图将 v0 header 投影为 v1；它不修改存储，并会拒绝 `prepare`、`load`、接管和追加，因为 v0 没有执行位置。以后没有明确读取器的步骤会让其版本降级为只能查看原文。
 
 **逐事件的 `ignorable` 标记吸收词汇表增长，普通的新增事件永远不用升版本。**事件词汇表由挂载了哪些插件决定，单个版本整数描述不了它。读取器遇到不认识的事件类型时拒绝解读日志，除非该事件的信封带 `ignorable: true`。默认为必需：忘写标记的后果是把一个本可恢复的会话拒绝过头（体验问题），而默认可忽略会让同样的疏忽静默恢复出残缺会话（安全事故）。架构保证了这条规则成立：模型可见内容只经三种带 `surfaceOp` 标记的 surface 事件加 `request/header`、`request/context` 折叠进入重建，危险的未知事件恰好是那些不进 surface 但改变日志其余部分解读方式的事件（`session/end-seed` 是现存例子）。
 
 ## 影响
 
-v0（0812 发布）交付的内容：分方向的拒绝并带原始日志路径；基于生成的已知词汇清单（`KNOWN_SESSION_EVENT_TYPES`，由 `gen-persistence-catalog` 从所有 `SessionEventMap` 声明合并生成，`verify-persistence-catalog` 保证新鲜）的未知事件守卫；`ignorable` 信封字段被种子校验、两个后端（SQLite 专用列，`SCHEMA_VERSION` 升到 15）和 BFF 线上 schema 接受。升级器链本身推迟到第一个真实的 v0→v1 变更出现、有真实对象可测时再建；写入侧目前不写 `ignorable`（还没有生产者需要它），`Session.append` 的这一表面随第一个使用者一起落地。在注册表面出现之前，仓库外插件的事件在第一方读取器下无法恢复会话，预发布立场接受这一点，而且拒绝是显式的而非静默的。未知类型守卫只在读取侧生效：`appendCore` 继续拒绝已淘汰的 legacy 形状，但不对新类型做词汇检查，因为写入时拒绝会让活跃会话的持久化中途停摆，代价大于下次加载时的显式拒绝。JSONL 后端还会在校验当前 header 形状、解码任何事件行之前，直接从原始 header 行拒绝外来版本，因此结构完全不同的未来格式仍会报告升级方向而不是"损坏"；SQLite 则先由自己的 `SCHEMA_VERSION` pragma 把关整个文件的结构。
+v0（0812 发布）交付的内容：分方向的拒绝并带原始日志路径；基于生成的已知词汇清单（`KNOWN_SESSION_EVENT_TYPES`，由 `gen-persistence-catalog` 从所有 `SessionEventMap` 声明合并生成，`verify-persistence-catalog` 保证新鲜）的未知事件守卫；`ignorable` 信封字段被种子校验、两个后端（SQLite 专用列，`SCHEMA_VERSION` 升到 15）和 BFF 线上 schema 接受。v1 新增 `SessionHeader.executionLocation`；协调器会单独保留物理 v0 header，只向独立历史读取器返回 v1 元数据视图，并拒绝会创建或接管活动 Session 的每条路径。写入侧目前不写 `ignorable`（还没有生产者需要它），`Session.append` 的这一表面随第一个使用者一起落地。在注册表面出现之前，仓库外插件的事件在第一方读取器下无法恢复会话，预发布立场接受这一点，而且拒绝是显式的而非静默的。未知类型守卫只在读取侧生效：`appendCore` 继续拒绝已淘汰的 legacy 形状，但不对新类型做词汇检查，因为写入时拒绝会让活跃会话的持久化中途停摆，代价大于下次加载时的显式拒绝。JSONL 后端接受 v0 header 用于历史，但会在校验当前 header 形状、解码任何事件行之前，直接从原始 header 行拒绝其他外来版本，因此结构完全不同的未来格式仍会报告升级方向而不是"损坏"；SQLite 则先由自己的 `SCHEMA_VERSION` pragma 把关整个文件的结构。
 
 ## 曾考虑的替代方案
 

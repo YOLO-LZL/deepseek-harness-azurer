@@ -223,7 +223,7 @@ describe('session.list projections column', () => {
     const coldId = SessionId('session-cold-listing')
     const load = () => { throw new Error('list must not load event logs') }
     ctx.provide('sessionPersistence', {
-      list: async () => [{ version: 0, id: coldId, createdAt: 5, cwd: '/tmp' }],
+      list: async () => [{ version: 1, id: coldId, createdAt: 5, cwd: '/tmp' }],
       locate: () => undefined,
       load,
       inspect: load,
@@ -247,7 +247,7 @@ describe('session.list projections column', () => {
     const { ctx } = await harness(true)
     const coldId = SessionId('session-cold-uncached')
     ctx.provide('sessionPersistence', {
-      list: async () => [{ version: 0, id: coldId, createdAt: 5, cwd: '/tmp' }],
+      list: async () => [{ version: 1, id: coldId, createdAt: 5, cwd: '/tmp' }],
       locate: () => undefined,
     } as never)
     const response = await api(ctx).sessions.list(request({}))

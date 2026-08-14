@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"3fd7d599-56b1-493a-930d-f1fc5e1556e8","createdAt":1783600631835,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"3fd7d599-56b1-493a-930d-f1fc5e1556e8","createdAt":1783600631835,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498800123,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Use the workflow tool exactly once, with args omitted, meta set to { \"name\": \"snapshot-flow\", \"description\": \"one child for the snapshot\" }, and this EXACT script body (copy it verbatim):\nphase('Run')\nconst reply = await agent('Reply with exactly the word WF_CHILD_OK and nothing else.')\nreturn { reply }\nAfter the workflow returns, reply with the single word WORKFLOW_DONE and stop. Do not use any other tool."}],"source":{"kind":"user"},"role":"user","id":"5188a9c7-d3ca-4679-b8df-1443e0a0a4df"}]}}
 {"type":"turn/start","seq":1,"time":1785821416248,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821416248,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

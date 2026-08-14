@@ -5,6 +5,7 @@
  */
 
 import { z } from 'zod'
+import type { ExecutionJsonValue } from '@deepseek-ai/dsh-execution-location'
 import type { RequestPayload, ResponseValue } from './rpc-map.ts'
 import type { Wire } from './rpc.schema.ts'
 import type { WorkspaceView } from './workspace.ts'
@@ -12,10 +13,31 @@ import { sessionIdSchema, workspaceIdSchema } from './sessions.schema.ts'
 
 export { workspaceIdSchema } from './sessions.schema.ts'
 
+/** Lossless-JSON target reference of an execution location (opaque to the wire). */
+const jsonValueSchema: z.ZodType<ExecutionJsonValue> = z.lazy(() => z.union([
+  z.null(),
+  z.boolean(),
+  z.number(),
+  z.string(),
+  z.array(jsonValueSchema),
+  z.record(z.string(), jsonValueSchema),
+]))
+
+const executionLocationSchema = z.object({
+  providerId: z.string(),
+  target: jsonValueSchema,
+  root: z.string(),
+  display: z.object({
+    label: z.string().optional(),
+    host: z.string().optional(),
+  }).optional(),
+})
+
 /** WorkspaceView row of every workspace.* response. */
 export const workspaceViewSchema = z.object({
   workspaceId: workspaceIdSchema,
   path: z.string(),
+  location: executionLocationSchema,
   title: z.string(),
   sessionIds: z.array(sessionIdSchema),
   createdAt: z.string(),
@@ -31,10 +53,21 @@ export const workspaceListValueSchema = z.object({
   archivedSessionIds: z.array(sessionIdSchema),
 }) satisfies z.ZodType<Wire<ResponseValue<'workspace.list'>>>
 
-/** workspace.create request payload: the existing directory to adopt. */
-export const workspaceCreateRequestSchema = z.object({
-  path: z.string(),
-}) satisfies z.ZodType<Wire<RequestPayload<'workspace.create'>>>
+/**
+ * workspace.create request payload: either a host directory to adopt
+ * (`kind: 'local'`) or a target in a registered execution world
+ * (`kind: 'provider'`). The provider performs the strict business validation
+ * of target and path; this schema bounds the wire shape only.
+ */
+export const workspaceCreateRequestSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('local'), path: z.string() }),
+  z.object({
+    kind: z.literal('provider'),
+    providerId: z.string(),
+    target: jsonValueSchema,
+    path: z.string(),
+  }),
+]) satisfies z.ZodType<Wire<RequestPayload<'workspace.create'>>>
 
 /** workspace.create response value. */
 export const workspaceCreateValueSchema = z.object({

@@ -76,8 +76,19 @@ export class SessionFormatUnsupportedError extends Error {
  */
 export function sessionFormatVersionRefusal(id: string, version: number): string {
   return version > SESSION_FORMAT_VERSION
-    ? `session "${id}" uses log format v${version}, but this harness reads only v${SESSION_FORMAT_VERSION}: the log was written by a newer harness — upgrade the harness to open it`
+    ? `session "${id}" uses log format v${version}, newer than this harness's v${SESSION_FORMAT_VERSION}: the log was written by a newer harness — upgrade the harness to open it`
     : `session "${id}" uses log format v${version}, older than the supported v${SESSION_FORMAT_VERSION}, and this build ships no upgrade path for it`
+}
+
+/**
+ * Whether this build can construct a detached history view from a stored
+ * format version. v0 predates execution locations, so it remains viewable but
+ * cannot establish a resumable execution context.
+ * @param version - the version parsed from a stored header.
+ * @returns whether the header may enter the history-read path.
+ */
+export function isSessionFormatHistoryReadable(version: unknown): boolean {
+  return version === SESSION_FORMAT_VERSION || (version === 0 && !Object.is(version, -0))
 }
 
 /** Coordinator policy supplied by a concrete persistence backend. */
@@ -244,6 +255,8 @@ interface LiveSessionState {
 interface PreparedSessionSource<TornMarker> {
   readonly inspection: SessionInspection
   readonly session: Session
+  /** Header read from storage before any history-only normalization. */
+  readonly storedMeta: SessionHeader
   readonly revision: SessionPersistenceRevision
   /** Session length after constructor-owned seed markers were appended. */
   readonly sessionLength: number
@@ -855,14 +868,14 @@ export class PersistenceCoordinator<TornMarker = unknown> {
       signal?.throwIfAborted()
       if (suffix === undefined) throw new Error(`session "${id}" not found`)
       this.assertStoredId(id, suffix.meta)
-      this.assertVersion(suffix.meta)
+      const historyMeta = this.historyMeta(suffix.meta)
       if (suffix.events.some(needsLegacyPrefix)) {
         const whole = await this.readStoredPrefix(id, signal)
         return { meta: whole.meta, events: whole.events.filter(event => event.seq >= fromSeq) }
       }
       const events = snapshotStoredEvents(suffix.events, id)
-      this.assertEventsSupported(suffix.meta, events)
-      return { meta: structuredClone(suffix.meta), events }
+      this.assertEventsSupported(historyMeta, events)
+      return { meta: structuredClone(historyMeta), events }
     }
     const whole = await this.readStoredPrefix(id, signal)
     // Sequential fallback: contiguous seqs from 0 make the suffix an index slice.
@@ -879,11 +892,11 @@ export class PersistenceCoordinator<TornMarker = unknown> {
     signal?.throwIfAborted()
     if (stored === undefined) throw new Error(`session "${id}" not found`)
     this.assertStoredId(id, stored.meta)
-    this.assertVersion(stored.meta)
+    const historyMeta = this.historyMeta(stored.meta)
     const events = snapshotStoredEvents(stored.events, id)
-    this.assertEventsSupported(stored.meta, events)
+    this.assertEventsSupported(historyMeta, events)
     return {
-      meta: structuredClone(stored.meta),
+      meta: structuredClone(historyMeta),
       events,
     }
   }
@@ -893,9 +906,9 @@ export class PersistenceCoordinator<TornMarker = unknown> {
     const stored = await this.backend.loadStored(id)
     if (stored === undefined) throw new Error(`session "${id}" not found`)
     try {
-      const { meta, events, revision, tornMarker } = stored
-      this.assertStoredId(id, meta)
-      this.assertVersion(meta)
+      const { meta: storedMeta, events, revision, tornMarker } = stored
+      this.assertStoredId(id, storedMeta)
+      const meta = this.historyMeta(storedMeta)
       const storedEvents = adoptStoredEvents(events, id)
       this.assertEventsSupported(meta, storedEvents)
 
@@ -914,6 +927,7 @@ export class PersistenceCoordinator<TornMarker = unknown> {
       return {
         inspection,
         session,
+        storedMeta,
         revision,
         sessionLength: session.events.length,
         tornMarker,
@@ -936,6 +950,7 @@ export class PersistenceCoordinator<TornMarker = unknown> {
   ): Promise<{ source: PreparedSessionSource<TornMarker>; state: SessionState } | undefined> {
     const id = source.inspection.meta.id
     const cursor = source.inspection.events.length
+    this.assertResumableVersion(source.storedMeta)
     const existing = this.states.get(id)
     if (existing?.owner !== undefined) {
       throw new Error(`session "${id}" already has a live persistence owner`)
@@ -1043,8 +1058,22 @@ export class PersistenceCoordinator<TornMarker = unknown> {
     }
   }
 
-  private assertVersion(meta: SessionHeader): void {
+  /** Return metadata accepted by detached history readers without changing storage. */
+  private historyMeta(meta: SessionHeader): SessionHeader {
+    if (meta.version === SESSION_FORMAT_VERSION) return meta
+    if (meta.version === 0) return { ...meta, version: SESSION_FORMAT_VERSION }
+    throw this.unsupported(meta, sessionFormatVersionRefusal(meta.id, meta.version))
+  }
+
+  /** Reject a stored header that cannot safely seed a live execution. */
+  private assertResumableVersion(meta: SessionHeader): void {
     if (meta.version === SESSION_FORMAT_VERSION) return
+    if (meta.version === 0) {
+      throw this.unsupported(
+        meta,
+        `session "${meta.id}" uses log format v0 and is available for history only: it records no execution location, so this harness will not resume it into a potentially different execution world`,
+      )
+    }
     throw this.unsupported(meta, sessionFormatVersionRefusal(meta.id, meta.version))
   }
 
@@ -1304,7 +1333,7 @@ export class PersistenceCoordinator<TornMarker = unknown> {
     if (meta.cwd !== session.header.cwd) {
       throw new Error(`session "${session.header.id}" is already persisted at a different cwd (persisted: ${String(meta.cwd)}, live: ${String(session.header.cwd)}) (id collision)`)
     }
-    this.assertVersion(meta)
+    this.assertResumableVersion(meta)
     const storedEvents = snapshotStoredEvents(events, session.header.id)
     this.assertEventsSupported(meta, storedEvents)
     if (!seedCoversPrefix(seed, storedEvents)) {

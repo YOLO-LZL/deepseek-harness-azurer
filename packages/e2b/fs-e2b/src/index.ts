@@ -7,6 +7,8 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import { posix } from 'node:path'
+import { ExecutionError } from '@deepseek-ai/dsh-execution-location'
+import type { ExecutionLocation } from '@deepseek-ai/dsh-execution-location'
 import { FileSystem, FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import type {
   FsDirEntry,
@@ -84,6 +86,23 @@ function decodeCanonicalPath(encoded: string): string {
 
 function signalOpts(signal: AbortSignal | undefined): { signal?: AbortSignal } {
   return signal === undefined ? {} : { signal }
+}
+
+/** A world-carrying call must name the E2B world; this backend never serves another. */
+function assertE2BWorld(world: ExecutionLocation | undefined, operation: string): void {
+  if (world === undefined) return
+  if (world.providerId !== 'e2b') {
+    throw new ExecutionError(
+      `fs-e2b cannot ${operation} for provider '${world.providerId}' — the routing layer selected the wrong backend`,
+      'execution-provider-not-found',
+    )
+  }
+  if (world.target !== null) {
+    throw new ExecutionError(
+      `fs-e2b expects target null, got ${JSON.stringify(world.target)}`,
+      'workspace-provider-invalid-target',
+    )
+  }
 }
 
 function commandOpts(signal: AbortSignal | undefined): { envs: Record<string, string>; signal?: AbortSignal } {
@@ -173,10 +192,14 @@ export class E2BFileSystem extends FileSystem {
 
   private readonly locks = new Map<string, Promise<unknown>>()
 
-  override async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {
+  override async resolve(
+    path: string,
+    opts?: { cwd?: string; signal?: AbortSignal; world?: ExecutionLocation },
+  ): Promise<FsTarget> {
     assertNotAborted(opts?.signal, 'resolve')
+    assertE2BWorld(opts?.world, 'resolve')
     if (path.trim().length === 0) throw new FsError('file_path must be a non-empty string', 'FS_NOT_FOUND')
-    const displayPath = posix.resolve(opts?.cwd ?? this.ctx.e2b.cwd, path)
+    const displayPath = posix.resolve(opts?.cwd ?? opts?.world?.root ?? this.ctx.e2b.cwd, path)
     try {
       const sandbox = await this.ctx.e2b.getSandbox()
       const targetKey = await this.canonicalPath(sandbox, displayPath, opts?.signal)
@@ -213,10 +236,15 @@ export class E2BFileSystem extends FileSystem {
     }
   }
 
-  override async lstat(path: string, opts?: { cwd?: string }, signal?: AbortSignal): Promise<FsPathInfo | undefined> {
+  override async lstat(
+    path: string,
+    opts?: { cwd?: string; world?: ExecutionLocation },
+    signal?: AbortSignal,
+  ): Promise<FsPathInfo | undefined> {
     assertNotAborted(signal, 'lstat')
+    assertE2BWorld(opts?.world, 'lstat')
     if (path.trim().length === 0) throw new FsError('file_path must be a non-empty string', 'FS_NOT_FOUND')
-    const displayPath = posix.resolve(opts?.cwd ?? this.ctx.e2b.cwd, path)
+    const displayPath = posix.resolve(opts?.cwd ?? opts?.world?.root ?? this.ctx.e2b.cwd, path)
     const entry = await this.probe(displayPath, displayPath, signal)
     if (entry === undefined) return undefined
     const type = entry.symlinkTarget !== undefined

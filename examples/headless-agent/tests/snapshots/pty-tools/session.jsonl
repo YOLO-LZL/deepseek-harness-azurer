@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498587408,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Exercise the six PTY tools in order, including one missing-session signal error, then reply DONE."}],"source":{"kind":"user"},"role":"user","id":"d35cdacd-b5e6-4968-b7a3-5ec48f403ef7"}]}}
 {"type":"turn/start","seq":1,"time":1785821457966,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821457966,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

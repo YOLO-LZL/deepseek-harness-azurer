@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"0bebc0f4-a089-4fde-9b6e-db9532cfd4de","createdAt":1783352209682,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"0bebc0f4-a089-4fde-9b6e-db9532cfd4de","createdAt":1783352209682,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498817948,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"What is my favorite color? Reply with just the color and stop. Do not use any tools."}],"source":{"kind":"user"},"role":"user","id":"8d3df251-9583-4ddb-9ead-a50df35bbac6"}]}}
 {"type":"turn/start","seq":1,"time":1785821434012,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821434012,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

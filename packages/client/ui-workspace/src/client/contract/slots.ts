@@ -20,7 +20,9 @@
  * leaves the surface with no add affordance at all.
  * Two holes exist because the two menu surfaces are independent slot entries
  * and a hole has exactly one declaring entry — they carry the same owner
- * contract and the same occupant.
+ * contract and the same occupant. Create-method lists follow the same rule:
+ * each surface owns a distinct child key, while a method provider registers
+ * the same component into both keys.
  */
 import type { HostObservable, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pull the owner SlotMap merges into programs that resolve the
@@ -28,7 +30,7 @@ import type { HostObservable, PropsLocale, PropsRenderSlots, PropsRuntime, Props
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
-  SessionId, SessionSearchResultItem, WorkspaceId, WorkspaceView,
+  SessionId, SessionSearchResultItem, WorkspaceCreateInput, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import type { createWorkspaceViewStore } from '../stores.ts'
 
@@ -50,12 +52,36 @@ export interface DirectoryFlowOwnerProps {
   onError: (message: string) => void
 }
 
+/**
+ * Owner share of one workspace create method: the segmented "本地 / SSH"
+ * conversation. The built-in local method IS the directory flow (see
+ * WorkspacePickFlow); a composed package (ui-ssh) registers one entry per
+ * additional method, receiving this owner conversation. The occupant reports
+ * a picked create input (local path or provider target) exactly once per open.
+ */
+export interface WorkspaceCreateMethodOwnerProps {
+  /** True while this method's interaction is requested; flipping back withdraws the request. */
+  open: boolean
+  /** True while the owner adopts a picked input; occupants disable commit affordances. */
+  busy: boolean
+  /** The operator picked a workspace location; the owner adopts it. */
+  onPicked: (input: WorkspaceCreateInput) => void
+  /** The operator dismissed the interaction; the owner closes the flow. */
+  onCancel: () => void
+  /** The interaction itself failed; the owner shows its error surface. */
+  onError: (message: string) => void
+}
+
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /** Directory-flow hole under the conversation empty-state picker (declared by the WorkspacePicker entry). */
     'conversation.hero.workspace.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
     /** Directory-flow hole under the sidebar browsing region (declared by the WorkspaceBrowser entry). */
     'sidebar.workspaces.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
+    /** Workspace create methods under the sidebar browser (declared by WorkspaceBrowser; ui-ssh registers the SSH method). */
+    'sidebar.workspaces.createMethod': { kind: 'list'; scope: 'root'; owner: WorkspaceCreateMethodOwnerProps }
+    /** Workspace create methods under the conversation picker (declared by WorkspacePicker; ui-ssh registers the SSH method). */
+    'conversation.hero.workspace.createMethod': { kind: 'list'; scope: 'root'; owner: WorkspaceCreateMethodOwnerProps }
   }
 }
 
@@ -63,6 +89,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 export type DirectoryFlowSlotName =
   | 'conversation.hero.workspace.directoryFlow'
   | 'sidebar.workspaces.directoryFlow'
+
+/** The two surface-local create-method child slots. */
+export type WorkspaceCreateMethodSlotName =
+  | 'conversation.hero.workspace.createMethod'
+  | 'sidebar.workspaces.createMethod'
 
 /**
  * Directory-picking share both trigger surfaces consume. Occupancy rides the
@@ -85,11 +116,30 @@ export type DirectoryPickingHooks = {
 }
 
 /**
+ * Create-method share both trigger surfaces consume: the registered workspace
+ * create methods beyond the built-in local flow, with their locale-bound
+ * labels (occupancy rides the reserved `hooks` compartment like the
+ * directory-flow share).
+ */
+export type WorkspaceCreateMethodInjected = {
+  hooks: {
+    /** Registered create methods (the built-in local flow excluded): stable entry id + display label. */
+    createMethods: HostObservable<readonly { id: string; label: string }[]>
+  }
+}
+
+/** Component-side view of the create-method share: the bound entries selector hook. */
+export type WorkspaceCreateMethodHooks = {
+  /** Selector hook over the registered create-method entries. */
+  useCreateMethods: SnapshotSelectorHook<readonly { id: string; label: string }[]>
+}
+
+/**
  * Browser-private injected share (arrives via the register inject factory).
  * Data reads use the global framework hooks; these are the Host actions the
  * browsing region drives.
  */
-export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
+export type WorkspaceBrowserInjected = DirectoryPickingInjected & WorkspaceCreateMethodInjected & {
   /**
    * Start a New Session in a Workspace: reuse-or-create its blank session and
    * open it; without an explicit workspace, inherit the current Session
@@ -133,17 +183,19 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
    * the Host response/changed frame; failures leave the order unchanged.
    */
   insertSessionBefore: (workspaceId: WorkspaceId, sessionId: SessionId, beforeSessionId?: SessionId) => Promise<void>
-  /** Adopt a picked host directory as a real Workspace before targeting a Session. */
-  createWorkspace: (input: { path: string }) => Promise<WorkspaceView>
+  /** Adopt a picked host directory (or a provider target) as a real Workspace before targeting a Session. */
+  createWorkspace: (input: WorkspaceCreateInput) => Promise<WorkspaceView>
 }
 
 /** Full browser props: shell owner share + viewing store + injected actions + the locale seat. */
 export type WorkspaceBrowserProps =
   PropsRuntime<'sidebar.workspaces'>
   & PropsRenderSlots<'sidebar.workspaces.directoryFlow'>
+  & PropsRenderSlots<'sidebar.workspaces.createMethod'>
   & PropsStore<ReturnType<typeof createWorkspaceViewStore>>
   & Omit<WorkspaceBrowserInjected, 'hooks'>
   & DirectoryPickingHooks
+  & WorkspaceCreateMethodHooks
   & PropsLocale<'workspace'>
 
 /**
@@ -151,9 +203,9 @@ export type WorkspaceBrowserProps =
  * callback; this callback creates only the real Host Workspace. A type alias
  * supplies the implicit index signature required by the registry.
  */
-export type WorkspacePickerInjected = DirectoryPickingInjected & {
-  /** Adopt a picked host directory as a real Workspace before targeting a Session. */
-  createWorkspace: (input: { path: string }) => Promise<WorkspaceView>
+export type WorkspacePickerInjected = DirectoryPickingInjected & WorkspaceCreateMethodInjected & {
+  /** Adopt a picked host directory (or a provider target) as a real Workspace before targeting a Session. */
+  createWorkspace: (input: WorkspaceCreateInput) => Promise<WorkspaceView>
 }
 
 /**
@@ -164,6 +216,8 @@ export type WorkspacePickerInjected = DirectoryPickingInjected & {
 export type WorkspacePickerProps =
   PropsRuntime<'conversation.hero.workspace'>
   & PropsRenderSlots<'conversation.hero.workspace.directoryFlow'>
+  & PropsRenderSlots<'conversation.hero.workspace.createMethod'>
   & Omit<WorkspacePickerInjected, 'hooks'>
   & DirectoryPickingHooks
+  & WorkspaceCreateMethodHooks
   & PropsLocale<'workspace'>

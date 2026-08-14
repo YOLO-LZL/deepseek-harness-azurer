@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"b1e35a14-a592-44e6-bf23-b2496ad2bf7b","createdAt":1785014475001,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"b1e35a14-a592-44e6-bf23-b2496ad2bf7b","createdAt":1785014475001,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498825884,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Using ONE run_code program, call tools.read on nested/task.txt. After the program finishes, answer the workspace handshake question using the newly discovered instructions: What is the Code Mode workspace handshake?"}],"source":{"kind":"user"},"role":"user","id":"3b04578e-7b22-4b44-b4cd-ef9d4d26fe8b"}]}}
 {"type":"turn/start","seq":1,"time":1785821441771,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785498825916,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

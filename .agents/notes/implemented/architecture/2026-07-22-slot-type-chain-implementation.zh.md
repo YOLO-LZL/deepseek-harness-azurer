@@ -34,7 +34,7 @@ ctx.slots.register({
 
 不存在独立的 slot 定义 API。`children` 对象同时做两件事：**声明子 slot**，并**授权本组件渲染它们**——slot 是渲染树上的一个洞，因为有人要渲染它才存在，所以 slot 的生命周期就是声明它的 entry 的生命周期（entry 一经 dispose（资源释放），slot 随之消亡、slot 内既有贡献清空）。children 的值是运行时 spec（`kind`/`scope` 驱动 outlet 的迭代形态与 binding 选择；`SlotMap` 是纯类型、运行时即被擦除，这正是键数组行不通的原因），并与对应 `SlotMap` entry 静态对齐校验——类型与值在同一点声明、交叉验证。
 
-对等原则：**声明子 slot 的 entry 独占渲染这些子 slot 的权力**，全部在 register 时确定（配置错误会在装载时明确失败；渲染热路径不再校验）。装载即炸的情形：第二个 entry 声明已被声明的 slot；向未声明的 slot register；同一个 store 句柄挂到两个 scope 之下；chain 注册缺 `select`。
+对等原则：**声明子 slot 的 entry 独占渲染这些子 slot 的权力**，全部在 register 时确定（配置错误会在装载时明确失败；渲染热路径不再校验）。渲染同一扩展点的兄弟宿主分别声明各自的子 key；提供方等待并注册到每个兄弟 key，而不是复用一个全局子 key。装载即炸的情形：第二个 entry 声明已被声明的 slot；向未声明的 slot register；同一个 store 句柄挂到两个 scope 之下；chain 注册缺 `select`。
 
 激活顺序独立于声明条目的贡献方使用 `ctx.slots.inject(key, callback)`，并让直接调用 `register()` 继续大声失败。声明、贡献方、替换与失败各自的生命周期由 [slot 声明注入决策](2026-08-05-slot-declaration-injection.md) 规定。
 

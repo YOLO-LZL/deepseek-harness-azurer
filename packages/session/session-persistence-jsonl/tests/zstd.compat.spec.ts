@@ -8,7 +8,7 @@ import { PublicZstdFrameDecoder } from '../src/zstd-public-decoder.ts'
 describe('JSONL Zstandard compatibility', () => {
   it('round-trips concatenated checksummed frames through the built-in Node API', async () => {
     const encoded = Buffer.concat([
-      await compressZstdFrame('{"type":"session","version":0,"id":"compat","createdAt":1}\n'),
+      await compressZstdFrame('{"type":"session","version":1,"id":"compat","createdAt":1}\n'),
       await compressZstdFrame('{"type":"turn/start","seq":0,"turn":1}\n'),
     ])
     const { frames, tornStart } = scanZstdFrames(encoded)

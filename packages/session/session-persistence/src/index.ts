@@ -48,6 +48,7 @@ export {
   PersistenceCoordinator,
   SessionFormatUnsupportedError,
   SessionPersistenceCorruptionError,
+  isSessionFormatHistoryReadable,
   sessionFormatVersionRefusal,
 } from './coordinator.ts'
 export type {
@@ -146,8 +147,10 @@ export abstract class SessionPersistence extends Service {
    * Prepare the exact unpublished Session used by resume. Implementations may
    * reuse object graphs retained by an earlier {@link inspect} after confirming
    * their durable revision is still current; disposal releases an unpublished
-   * reservation. Revision retries require the durable log to remain unchanged
-   * for one read/check round trip; continuous external writers may delay completion.
+   * reservation. A v0 artifact is available only through detached history
+   * reads because it records no execution location; preparation rejects it.
+   * Revision retries require the durable log to remain unchanged for one
+   * read/check round trip; continuous external writers may delay completion.
    * @param id - persisted session to prepare.
    * @param signal - optional cancellation for preparation work.
    * @returns one owned unpublished Session preparation.
@@ -171,12 +174,14 @@ export abstract class SessionPersistence extends Service {
    * Load an immutable balanced logical view and commit any required cold
    * recovery. A complete interrupted final turn is preserved and durably
    * closed with missing tool errors plus any open step and turn boundaries;
-   * only a torn final record is discarded. Unknown versions and corruption in
-   * the committed prefix reject. Implementations MUST NOT crash-repair an
-   * identity still bound to a live Session: a balanced live log may return as a
-   * durable snapshot, while an open live turn rejects. Returned values may be
-   * shared with immutable live or prepared state and must not be mutated.
-   * Revision-based implementations may wait for one stable read/check round trip.
+   * only a torn final record is discarded. A v0 artifact is history-only and
+   * rejects here because it cannot safely seed an execution. Other unsupported
+   * versions and corruption in the committed prefix also reject. Implementations
+   * MUST NOT crash-repair an identity still bound to a live Session: a balanced
+   * live log may return as a durable snapshot, while an open live turn rejects.
+   * Returned values may be shared with immutable live or prepared state and
+   * must not be mutated. Revision-based implementations may wait for one stable
+   * read/check round trip.
    * @param id - the persisted session to reload.
    * @returns the header and a log ending on a balanced `turn/end`.
    */
@@ -187,12 +192,14 @@ export abstract class SessionPersistence extends Service {
    * publishing it. A cold complete interrupted turn receives synthetic closers
    * in memory and a torn physical tail remains untouched. An already-live
    * Session instead yields its current immutable snapshot, which may contain an
-   * open turn and its `session/end-seed` boundary. Coordinator-backed
-   * implementations retain the exact cold unpublished Session for bounded
-   * reuse by a later {@link prepare}. A stale ready source is reloaded; a source
-   * already committing or reserved for resume remains exclusive, and inspection
-   * may borrow its immutable view. Callers borrow only the immutable header and
-   * log. Continuous external writers may delay revision convergence.
+   * open turn and its `session/end-seed` boundary. Inspection maps a v0 header
+   * to an in-memory current-format view for history without changing storage;
+   * {@link prepare} and {@link load} still reject that source. Coordinator-backed
+   * implementations retain the exact cold unpublished Session for bounded reuse
+   * by a later {@link prepare}. A stale ready source is reloaded; a source already
+   * committing or reserved for resume remains exclusive, and inspection may borrow
+   * its immutable view. Callers borrow only the immutable header and log.
+   * Continuous external writers may delay revision convergence.
    * @param id - the persisted session to inspect.
    * @param signal - optional cancellation for queued and backend read work.
    * @returns the validated header and current logical event log.
@@ -208,6 +215,8 @@ export abstract class SessionPersistence extends Service {
    * publication. Only events from the valid contiguous stored prefix are
    * returned, so a torn fragment never reaches the caller. `fromSeq` at or
    * beyond the stored prefix returns an empty event list (never an error).
+   * A v0 header maps to an in-memory current-format history view without
+   * changing storage; it remains unavailable to {@link prepare} and {@link load}.
    * Backends whose medium can seek by seq
    * (SQLite) read only the suffix; sequential media (JSONL, both encodings)
    * still parse the whole artifact and skip forward — the primitive bounds

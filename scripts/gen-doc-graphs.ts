@@ -230,6 +230,23 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns WorkspaceId-branded records over the domain facility; stable sessionIds accounts drive Host RPC and GUI projections.',
   },
   {
+    key: 'executionWorlds',
+    pkg: 'execution-world',
+    title: 'Execution-world provider registry',
+    mode: 'seam',
+    implementations: ['workspace-ssh'],
+    consumers: ['workspace', 'fs', 'subprocess', 'lsp'],
+    note: 'Routes a persisted location to co-located filesystem, subprocess, and workspace operations; the built-in local provider remains available when no location is supplied.',
+  },
+  {
+    key: 'ssh',
+    pkg: 'ssh',
+    title: 'SSH connection and transport runtime',
+    mode: 'core',
+    consumers: ['apiproxy', 'workspace-ssh', 'tool-ssh'],
+    note: 'Owns saved connection settings, local OpenSSH alias discovery, and lifecycle-bound transport instances for remote execution worlds and explicit SSH tools.',
+  },
+  {
     key: 'sessionQuery',
     pkg: 'session-query',
     title: 'Session reads, traces, filters, and search',

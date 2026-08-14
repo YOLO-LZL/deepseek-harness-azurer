@@ -3,6 +3,7 @@
  * together; introduce protocolVersion only when an independently released client appears.
  */
 
+import type { SshConfigHost } from '@deepseek-ai/dsh-ssh'
 import type { RpcRequest, RpcResponse } from './rpc.ts'
 
 /** One directory row of a listing: a child entry or a breadcrumb ancestor. */
@@ -93,4 +94,51 @@ export interface HostApi {
     request: RpcRequest<{ path: string }>,
     signal: AbortSignal,
   ): Promise<RpcResponse<{ opened: true }>>
+
+  /**
+   * SSH capability status: whether a usable system ssh client exists and which
+   * read-only aliases the local `~/.ssh/config` exposes. The UI uses this to
+   * offer (or gracefully hide) the SSH workspace method and to hint aliases.
+   */
+  sshStatus(request: RpcRequest<{}>): Promise<RpcResponse<{
+    available: boolean
+    configHosts: SshConfigHost[]
+  }>>
+
+  /**
+   * List one remote directory level through the ssh execution world. The
+   * target is a saved connection id or a `config:` alias; paths are absolute
+   * remote paths. Fails with `execution-unavailable` when the ssh client or
+   * the world cannot serve right now.
+   */
+  sshListDirectory(request: RpcRequest<{
+    connectionId?: string
+    alias?: string
+    path: string
+  }>): Promise<RpcResponse<{ entries: { name: string; type: 'file' | 'directory' | 'other'; size?: number }[] }>>
+
+  /**
+   * Create one remote directory (and missing ancestors) through the ssh
+   * execution world. Fails with `execution-unavailable` when the world cannot
+   * serve right now.
+   */
+  sshCreateDirectory(request: RpcRequest<{
+    connectionId?: string
+    alias?: string
+    path: string
+    name: string
+  }>): Promise<RpcResponse<{ path: string }>>
+
+  /**
+   * Probe one remote path's live state through the ssh execution world:
+   * `ok`, `missing-dir`, `unreachable`, or `invalid`.
+   */
+  sshProbe(request: RpcRequest<{
+    connectionId?: string
+    alias?: string
+    path: string
+  }>): Promise<RpcResponse<{
+    kind: 'ok' | 'missing-dir' | 'unreachable' | 'invalid'
+    message?: string
+  }>>
 }

@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"33333333-3333-4333-8333-333333333333","createdAt":1783951000000,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"33333333-3333-4333-8333-333333333333","createdAt":1783951000000,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1783951000001,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Use read_image to look at red.png in the current directory, then reply with exactly the single word DONE."}],"source":{"kind":"user"},"role":"user","id":"0a0a0a0a-0000-4000-8000-000000000001"}]}}
 {"type":"turn/start","seq":1,"time":1783951000002,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1783951000002,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

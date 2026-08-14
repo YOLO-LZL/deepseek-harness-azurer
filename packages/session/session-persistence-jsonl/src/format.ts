@@ -9,9 +9,13 @@
  */
 
 import { join } from 'node:path'
-import { decodeStorageRecord, packChunkRuns, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { decodeStorageRecord, packChunkRuns } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader, SessionId, StorageRecord } from '@deepseek-ai/dsh-session'
-import { SessionFormatUnsupportedError, sessionFormatVersionRefusal } from '@deepseek-ai/dsh-session-persistence'
+import {
+  isSessionFormatHistoryReadable,
+  SessionFormatUnsupportedError,
+  sessionFormatVersionRefusal,
+} from '@deepseek-ai/dsh-session-persistence'
 
 /** Physical encoding selected for JSONL session artifacts. */
 export type JsonlCompression = 'zstd' | 'none'
@@ -231,16 +235,16 @@ interface SessionLogScan {
 
 /** Parse one complete header record supplied independently from event rows. */
 /**
- * Refuse a header carrying a format version this build does not read BEFORE
- * validating the current header shape or decoding any event row: a future
- * format need not satisfy today's structural checks at all, and its user must
- * see "upgrade the harness", never "corrupt session log".
+ * Refuse a header carrying a format version this build cannot read for
+ * history BEFORE validating the current header shape or decoding any event
+ * row. A future format need not satisfy today's structural checks at all.
  * @param parsed - the JSON-parsed first line of a session artifact.
  */
 function refuseForeignFormatVersion(parsed: unknown): void {
   if (typeof parsed !== 'object' || parsed === null) return
   const { version, id } = parsed as { version?: unknown; id?: unknown }
-  if (typeof version !== 'number' || version === SESSION_FORMAT_VERSION) return
+  if (isSessionFormatHistoryReadable(version)) return
+  if (typeof version !== 'number') return
   throw new SessionFormatUnsupportedError(
     sessionFormatVersionRefusal(typeof id === 'string' ? id : String(id), version),
   )

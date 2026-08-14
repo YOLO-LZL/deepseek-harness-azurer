@@ -1341,7 +1341,35 @@ export function runCoordinatorContract(name: string, makeFixture: () => Promise<
       }
     })
 
-    it('rejects an older format version on load without claiming an upgrade path', async () => {
+    it('reads v0 through history inspection without rewriting its stored header', async () => {
+      const fix = await makeFixture()
+      const { ctx, fiber } = await freshCtx(fix)
+      try {
+        const m = { version: 0, id: SessionId('v0-history'), createdAt: 1, cwd: WORK }
+        await ctx.sessionPersistence.create(m)
+        await ctx.sessionPersistence.append(m.id, oneTurnLog())
+
+        const inspected = await ctx.sessionPersistence.inspect(m.id)
+        expect(inspected.meta).toMatchObject({ id: m.id, version: SESSION_FORMAT_VERSION, cwd: WORK })
+        expect(inspected.events).toEqual(oneTurnLog())
+        const suffix = await ctx.sessionPersistence.readFrom(m.id, 1)
+        expect(suffix.meta).toMatchObject({ id: m.id, version: SESSION_FORMAT_VERSION, cwd: WORK })
+        expect(suffix.events).toEqual(oneTurnLog().slice(1))
+        expect((await ctx.sessionPersistence.list()).find(header => header.id === m.id)?.version).toBe(0)
+
+        const failure = await ctx.sessionPersistence.prepare(m.id).then(() => undefined, (error: unknown) => error as Error)
+        expect(failure?.name).toBe('SessionFormatUnsupportedError')
+        expect(failure?.message).toMatch(/available for history only.*no execution location/)
+        const loadFailure = await ctx.sessionPersistence.load(m.id).then(() => undefined, (error: unknown) => error as Error)
+        expect(loadFailure?.name).toBe('SessionFormatUnsupportedError')
+        expect(loadFailure?.message).toMatch(/available for history only.*no execution location/)
+      } finally {
+        await fiber.dispose()
+        await fix.cleanup()
+      }
+    })
+
+    it('rejects an unsupported older format version on load without claiming an upgrade path', async () => {
       const fix = await makeFixture()
       const { ctx, fiber } = await freshCtx(fix)
       try {
@@ -1350,7 +1378,7 @@ export function runCoordinatorContract(name: string, makeFixture: () => Promise<
         await ctx.sessionPersistence.append(m.id, oneTurnLog())
         const failure = await ctx.sessionPersistence.load(m.id).then(() => undefined, (error: unknown) => error as Error)
         expect(failure?.name).toBe('SessionFormatUnsupportedError')
-        expect(failure?.message).toMatch(/older than the supported v0.*no upgrade path/)
+        expect(failure?.message).toMatch(/older than the supported v1.*no upgrade path/)
       } finally {
         await fiber.dispose()
         await fix.cleanup()

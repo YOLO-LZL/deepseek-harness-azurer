@@ -30,7 +30,7 @@ function agent(ctx: Context, cwd: string | undefined): Agent {
   const id = SessionId(`persistent-bash-owner-${callNumber}`)
   const scope = ctx.plugin(() => {})
   const session = Session.create(id, [], {
-    version: 0,
+    version: 1,
     id,
     createdAt: 0,
     ...cwd === undefined ? {} : { cwd },

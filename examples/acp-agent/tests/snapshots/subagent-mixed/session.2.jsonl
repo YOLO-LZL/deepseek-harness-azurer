@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"02b3a8dd-1d5e-4866-825f-5fbf5000a632","createdAt":1783352147504,"cwd":"{{cwd}}","parentSession":"959ffdf5-03e2-465e-9482-009b704632dc","seedLength":36,"origin":"subagent","delegationDepth":1}
+{"type":"session","version":1,"id":"02b3a8dd-1d5e-4866-825f-5fbf5000a632","createdAt":1783352147504,"cwd":"{{cwd}}","parentSession":"959ffdf5-03e2-465e-9482-009b704632dc","seedLength":36,"origin":"subagent","delegationDepth":1}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498797352,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Remember this fact for later: the project codeword is SAFFRON. Reply with the single word OK and stop. Do not use any tools."}],"source":{"kind":"user"},"role":"user","id":"3d1ea7cb-c273-4c38-a765-5ff256eaaf51"}]}}
 {"type":"turn/start","seq":1,"time":1785821407687,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821407687,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

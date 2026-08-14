@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498774978,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Use the lsp tool exactly once to find the definition at subject.ts line 1 character 7, then reply with exactly DONE."}],"source":{"kind":"user"},"role":"user","id":"d50783a4-e1dd-4d27-8aaf-fa854ffa5560"}]}}
 {"type":"turn/start","seq":1,"time":1785821380423,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821380423,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

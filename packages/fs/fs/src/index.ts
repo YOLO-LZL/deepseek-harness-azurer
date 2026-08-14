@@ -9,6 +9,7 @@
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
+import type { ExecutionLocation } from '@deepseek-ai/dsh-execution-location'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type {
   FsDirEntry,
@@ -110,10 +111,13 @@ export abstract class FileSystem extends Service {
    * async even though the local backend only normalizes + realpaths.
    *
    * @param path - the path to resolve; relative paths resolve against `opts.cwd`.
-   * @param opts - optional cwd override and cancellation signal.
+   * @param opts - optional cwd override, the execution world the path belongs
+   *   to (the routing layer selects the backend; a backend validates that the
+   *   world is its own and interprets paths in its world syntax), and
+   *   cancellation signal. Omitting `world` keeps the backend's default world.
    * @returns the stable target; the same file yields the same `targetKey`.
    */
-  abstract resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget>
+  abstract resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal; world?: ExecutionLocation }): Promise<FsTarget>
 
   /**
    * Return the canonical absolute path a subprocess in this filesystem's
@@ -158,14 +162,15 @@ export abstract class FileSystem extends Service {
    * normal reads/writes, while `lstat` lets a consumer reject the path itself
    * before that follow happens.
    *
-   * `opts.cwd` follows {@link resolve}'s cwd rules. `undefined` means the path is
-   * absent.
+   * `opts.cwd` follows {@link resolve}'s cwd rules; `opts.world` follows its
+   * world rules. `undefined` means the path is absent.
    * @param path - the path to inspect; relative paths resolve against `opts.cwd`.
-   * @param opts - `cwd` overrides the backend's default base for relative paths.
+   * @param opts - `cwd` overrides the backend's default base for relative paths;
+   *   `world` names the execution world the path belongs to.
    * @param signal - aborts the metadata round-trip.
    * @returns metadata only, never content; undefined for an absent path.
    */
-  abstract lstat(path: string, opts?: { cwd?: string }, signal?: AbortSignal): Promise<FsPathInfo | undefined>
+  abstract lstat(path: string, opts?: { cwd?: string; world?: ExecutionLocation }, signal?: AbortSignal): Promise<FsPathInfo | undefined>
 
   /**
    * Read the whole regular text file as a single decoded string.

@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"{{sessionId}}","createdAt":1785015039278,"cwd":"{{cwd}}/workspace"}
+{"type":"session","version":1,"id":"{{sessionId}}","createdAt":1785015039278,"cwd":"{{cwd}}/workspace"}
 {"type":"turn/start","seq":0,"time":1785015039291,"data":{"turn":1,"trigger":{"kind":"message","source":{"kind":"user","rpcId":"{{rpcId}}"}}}}
 {"type":"user/message","seq":1,"time":1785015039292,"data":{"content":[{"type":"text","text":"Reply with the single word LIGHTHOUSE and stop."}],"source":{"kind":"user","rpcId":"{{rpcId}}"}},"surfaceOp":"append"}
 {"type":"session/title","seq":2,"time":1785015039294,"data":{"title":"Reply with the single word","messageSeqs":[1],"source":{"kind":"fallback"}}}

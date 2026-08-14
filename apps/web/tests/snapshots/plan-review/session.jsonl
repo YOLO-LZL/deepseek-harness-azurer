@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"{{sessionId}}","createdAt":1785406804293,"cwd":"{{cwd}}/workspace"}
+{"type":"session","version":1,"id":"{{sessionId}}","createdAt":1785406804293,"cwd":"{{cwd}}/workspace"}
 {"type":"command/run","seq":0,"time":1785406804350,"data":{"commandId":"cmd-228a60ef-1","name":"plan","args":" Plan a small change: add a --greeting flag to a CLI. Do not read or write any files. Call exit_plan_mode with a short plan of at most five bullet points. Once the plan is approved, reply with the single word DONE and stop.","source":{"kind":"user"}}}
 {"type":"plan/mode","seq":1,"time":1785406804350,"data":{"active":true}}
 {"type":"command/done","seq":2,"time":1785406804352,"data":{"commandId":"cmd-228a60ef-1","kind":"success","text":"Plan mode on. Use /plan off to leave."}}

@@ -152,7 +152,7 @@ describe('sessions.fork', () => {
     const sourceId = sid('session-cold-subagent')
     const parentId = sid('session-cold-parent')
     const header: SessionHeader = {
-      version: 0,
+      version: 1,
       id: sourceId,
       createdAt: 1,
       cwd: '/proj',

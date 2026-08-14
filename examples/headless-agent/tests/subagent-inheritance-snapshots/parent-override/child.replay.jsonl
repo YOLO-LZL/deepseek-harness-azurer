@@ -1,4 +1,4 @@
-{"type": "session", "version": 0, "id": "subagent-inheritance-child", "createdAt": 2, "delegationDepth": 1}
+{"type": "session", "version": 1, "id": "subagent-inheritance-child", "createdAt": 2, "delegationDepth": 1}
 {"type":"turn/start","seq":0,"time":1,"data":{"turn":1,"trigger":{"kind":"message","source":{"kind":"user"}}}}
 {"type":"user/message","seq":1,"time":2,"data":{"content":[{"type":"text","text":"delegated task"}],"source":{"kind":"user"}},"surfaceOp":"append"}
 {"type":"step/start","seq":2,"time":3,"data":{"turn":1,"step":1}}

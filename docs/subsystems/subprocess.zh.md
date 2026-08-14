@@ -102,6 +102,14 @@ interface SubprocessSpawnSpec {
   argv: readonly string[]
   /** Working directory for the child. */
   cwd: string
+  /**
+   * The execution world the child belongs to, when the caller routes through
+   * the execution-world registry. The routing layer selects the backend; a
+   * backend validates that the world is its own and interprets `cwd` (and
+   * executable paths) in its world syntax. Omitting it keeps the backend's
+   * default world (local).
+   */
+  world?: ExecutionLocation | undefined
   /** Per-stream stdio dispositions. */
   stdio: SubprocessStdio
   /**
@@ -298,9 +306,13 @@ Implementations must honor these semantics:
  * @param command - absolute executable path or bare PATH name.
  * @param env - explicit environment entries used for lookup.
  * @param signal - aborts remote or local lookup.
+ * @param world - the execution world the executable belongs to, when the
+ *   caller routes through the registry; the backend validates the world is
+ *   its own and resolves in its world syntax. Omitted keeps the backend's
+ *   default world.
  * @returns a canonical executable path.
  */
-abstract resolveExecutable( command: string, env?: Readonly<Record<string, string>>, signal?: AbortSignal, ): Promise<string>
+abstract resolveExecutable( command: string, env?: Readonly<Record<string, string>>, signal?: AbortSignal, world?: ExecutionLocation, ): Promise<string>
 
 /**
  * Start one managed child process from a fully-specified spec; this seam
@@ -320,5 +332,7 @@ abstract spawn(spec: SubprocessSpawnSpec): SubprocessHandle
 abstract spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle>
 ```
 
-Source: [`packages/subprocess/subprocess/src/index.ts:102`](../../packages/subprocess/subprocess/src/index.ts)
+Types: [ExecutionLocation](workspace.md)
+
+Source: [`packages/subprocess/subprocess/src/index.ts:103`](../../packages/subprocess/subprocess/src/index.ts)
 <!-- END GENERATED cordis-surface -->

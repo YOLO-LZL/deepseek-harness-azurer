@@ -9,11 +9,13 @@
  */
 
 import { stat } from 'node:fs/promises'
+import { executionLocationEquals } from '@deepseek-ai/dsh-execution-world'
+import type { ExecutionLocation } from '@deepseek-ai/dsh-execution-world'
 import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import type { WorkspaceRecord } from './spec.ts'
 import type { Workspace, WorkspaceId } from './types.ts'
-import { realpathNormalize } from './paths.ts'
+import { locationOfRecord } from './location.ts'
 
 /** An insertSessionBefore request named a session or anchor not on the account (storage failures stay plain errors). */
 export class WorkspaceMoveInvalidError extends Error {
@@ -39,12 +41,14 @@ export interface WorkspaceEntityHost {
   table(): KvTable<WorkspaceId, WorkspaceRecord>
 
   /**
-   * Read a session's canonical directory from the registry's header index.
-   * @param id - Session whose indexed path is requested.
-   * @returns the canonical directory, or `undefined` when the header is
-   * missing or its cwd cannot identify an existing directory.
+   * Read a session's canonical execution location from the registry's header
+   * index. Membership compares locations, not host paths: a remote session
+   * belongs to the workspace whose location it shares.
+   * @param id - Session whose indexed location is requested.
+   * @returns the canonical location, or `undefined` when the header is
+   * missing or its location cannot identify an existing directory.
    */
-  sessionPath(id: SessionId): string | undefined
+  sessionLocation(id: SessionId): ExecutionLocation | undefined
 
   /**
    * Read one stored session header for attach validation.
@@ -55,11 +59,22 @@ export interface WorkspaceEntityHost {
   readSessionHeader(id: SessionId): Promise<SessionHeader>
 
   /**
-   * Publish a successfully validated canonical cwd to the projection index.
+   * Publish a successfully validated canonical location to the projection
+   * index.
    * @param id - Validated session id.
-   * @param path - Canonical existing directory from the immutable header cwd.
+   * @param location - Canonical existing directory location from the immutable header.
    */
-  rememberSessionPath(id: SessionId, path: string): void
+  rememberSessionLocation(id: SessionId, location: ExecutionLocation): void
+
+  /**
+   * Canonicalize one session header into its canonical execution location:
+   * the persisted location canonicalized by its owning provider, else the
+   * local interpretation of `cwd` (the pre-location format). Rejects when the
+   * world cannot serve or the directory does not exist.
+   * @param header - the header to canonicalize.
+   * @returns the canonical location.
+   */
+  canonicalizeLocation(header: SessionHeader): Promise<ExecutionLocation>
 }
 
 /** Chain-slot abort sentinel thrown by the update fn when the record needs no change; only `mutate` observes it. */
@@ -86,6 +101,10 @@ export class WorkspaceEntity implements Workspace {
     return this.record.path
   }
 
+  get location(): ExecutionLocation {
+    return locationOfRecord(this.record)
+  }
+
   get title(): string {
     return this.record.title
   }
@@ -99,7 +118,10 @@ export class WorkspaceEntity implements Workspace {
   }
 
   get sessionIds(): readonly SessionId[] {
-    return this.record.sessionIds.filter(id => this.host.sessionPath(id) === this.record.path)
+    return this.record.sessionIds.filter((id) => {
+      const location = this.host.sessionLocation(id)
+      return location !== undefined && executionLocationEquals(location, this.location)
+    })
   }
 
   async setTitle(title: string): Promise<void> {
@@ -108,40 +130,29 @@ export class WorkspaceEntity implements Workspace {
 
   async attachSession(sessionId: SessionId): Promise<void> {
     // Validation is skipped when the settled snapshot already accounts the
-    // id: the cwd fact was checked when it first attached and both inputs
-    // (stored header cwd, workspace path) are immutable. Membership itself is
-    // decided on the write chain inside `mutate`, never on this snapshot.
+    // id: the location fact was checked when it first attached and both inputs
+    // (stored header location, workspace location) are immutable. Membership
+    // itself is decided on the write chain inside `mutate`, never on this
+    // snapshot.
     if (!this.record.sessionIds.includes(sessionId)) {
       const header = await this.host.readSessionHeader(sessionId)
-      if (header.cwd === undefined) {
-        throw new Error(
-          `cannot attach session '${sessionId}' to workspace '${this.record.path}': `
-          + 'its stored header carries no cwd to validate against',
-        )
-      }
-      let cwd: string
+      let location: ExecutionLocation
       try {
-        cwd = await realpathNormalize(header.cwd)
+        location = await this.host.canonicalizeLocation(header)
       } catch (error) {
         throw new Error(
           `cannot attach session '${sessionId}' to workspace '${this.record.path}': `
-          + `its cwd '${header.cwd}' does not resolve, so it cannot be validated`,
+          + `its execution location does not resolve — ${error instanceof Error ? error.message : String(error)}`,
           { cause: error },
         )
       }
-      if (!(await stat(cwd)).isDirectory()) {
+      if (!executionLocationEquals(location, this.location)) {
         throw new Error(
           `cannot attach session '${sessionId}' to workspace '${this.record.path}': `
-          + `its cwd '${header.cwd}' is not a directory`,
+          + `its execution location resolves to provider '${location.providerId}' root '${location.root}'`,
         )
       }
-      if (cwd !== this.record.path) {
-        throw new Error(
-          `cannot attach session '${sessionId}' to workspace '${this.record.path}': `
-          + `its cwd resolves to '${cwd}'`,
-        )
-      }
-      this.host.rememberSessionPath(sessionId, cwd)
+      this.host.rememberSessionLocation(sessionId, location)
     }
     await this.mutate(record => record.sessionIds.includes(sessionId)
       ? record
@@ -190,7 +201,7 @@ export class WorkspaceEntity implements Workspace {
   /**
    * The single write path: run `fn` on the domain write chain via
    * `table.update`, stamping `updatedAt` and pruning candidates that no
-   * longer pass the id-plus-canonical-cwd membership check, then swap the
+   * longer pass the id-plus-canonical-location membership check, then swap the
    * snapshot.
    *
    * `fn` sees the value current at its chain slot, so membership decisions
@@ -204,9 +215,10 @@ export class WorkspaceEntity implements Workspace {
     try {
       next = await this.host.table().update(this.id, (current) => {
         const changed = fn(current)
-        const sessionIds = changed.sessionIds.filter(
-          id => this.host.sessionPath(id) === changed.path,
-        )
+        const sessionIds = changed.sessionIds.filter((id) => {
+          const location = this.host.sessionLocation(id)
+          return location !== undefined && executionLocationEquals(location, this.location)
+        })
         if (changed === current && sessionIds.length === current.sessionIds.length) {
           throw unchangedSentinel
         }

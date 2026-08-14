@@ -19,6 +19,9 @@ import type {
   LspProviderQuery,
   LspQueryResult,
 } from '@deepseek-ai/dsh-lsp'
+import type { ExecutionLocation } from '@deepseek-ai/dsh-execution-location'
+import type { ResolvedExecutionWorld } from '@deepseek-ai/dsh-execution-world'
+import type { SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { abortable, abortError } from './abort.ts'
 import { canonicalizeWorkspace, readHostSource } from './host.ts'
@@ -26,6 +29,12 @@ import type { HostWorkspace } from './host.ts'
 import { LspInstance } from './instance.ts'
 import type { ConnectionSpawner } from './connection.ts'
 import type { InstanceSpec } from './instance.ts'
+
+/** One world's executable + spawner pair, resolved lazily and cached. */
+interface WorldRuntime {
+  executable: string
+  spawner: ConnectionSpawner
+}
 
 export { canonicalizeWorkspace, readHostSource } from './host.ts'
 export { encodeMessage, MessageDecoder } from './framing.ts'
@@ -116,6 +125,19 @@ function throwTeardownFailures(results: readonly PromiseSettledResult<void>[], m
   if (failures.length > 1) throw new AggregateError(failures, message)
 }
 
+/** Resolve one execution location to its live world through the registry. */
+function resolveWorld(ctx: Context, location: ExecutionLocation): ResolvedExecutionWorld | undefined {
+  const registry = (ctx.get as unknown as (service: string) => unknown)('executionWorlds') as
+    | { resolve(location: ExecutionLocation): ResolvedExecutionWorld }
+    | undefined
+  if (registry === undefined) return undefined
+  try {
+    return registry.resolve(location)
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * Register the configured stdio LSP providers. Resolves every executable at load (after credential
  * scrubbing) before publishing any provider; each process launches lazily on its first matching
@@ -155,6 +177,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         resolved,
         executable,
         spec => ctx.subprocess.spawn(spec),
+        location => resolveWorld(ctx, location),
       )
     })
     try {
@@ -213,7 +236,7 @@ function assertPositiveInteger(providerId: string, name: string, value: number):
   }
 }
 
-/** A pooled generic provider: one server process per canonical workspace, created on demand. */
+/** A generic provider: one server process per canonical workspace, created on demand. */
 class LocalLspProvider implements LspProvider {
   readonly id: LspProviderId
   readonly extensionToLanguage: Readonly<Record<string, string>>
@@ -223,6 +246,8 @@ class LocalLspProvider implements LspProvider {
   private readonly queues = new Map<WorkspaceKey, Promise<void>>()
   /** Workspace canonicalizations that have not entered a provider-owned queue yet. */
   private readonly workspaceLookups = new Set<Promise<void>>()
+  /** Per-world resolved executables (world location key → promise). */
+  private readonly worldRuntimes = new Map<string, Promise<WorldRuntime>>()
   private readonly lifetime = new AbortController()
   private disposed = false
 
@@ -232,6 +257,7 @@ class LocalLspProvider implements LspProvider {
     private readonly config: ResolvedServerConfig,
     private readonly executable: string,
     private readonly spawner: ConnectionSpawner,
+    private readonly resolveWorld: (location: ExecutionLocation) => ResolvedExecutionWorld | undefined,
   ) {
     this.id = LspProviderId(providerId)
     this.extensionToLanguage = config.extensionToLanguage
@@ -261,7 +287,13 @@ class LocalLspProvider implements LspProvider {
     // Honor an already-aborted signal before provider I/O so a canceled request never starts a server.
     this.assertActive(signal)
     const querySignal = this.querySignal(signal)
-    const workspaceResult = canonicalizeWorkspace(this.fs, request.workspaceRoot, querySignal)
+    // Remote sessions route the workspace filesystem AND the server process
+    // into their execution world; local sessions keep the load-time default.
+    const world = request.executionLocation !== undefined
+      ? this.resolveWorld(request.executionLocation)
+      : undefined
+    const fs = world?.filesystem ?? this.fs
+    const workspaceResult = canonicalizeWorkspace(fs, request.workspaceRoot, querySignal)
     const workspaceLookup = workspaceResult.then(() => undefined, () => undefined)
     this.workspaceLookups.add(workspaceLookup)
     let workspace: HostWorkspace
@@ -276,11 +308,12 @@ class LocalLspProvider implements LspProvider {
       this.assertActive(querySignal)
       // Read inside the workspace queue but before spawning: a queued query sees current bytes when
       // its turn starts, while an invalid source still cannot leave an idle process pooled.
-      const source = await readHostSource(this.fs, request.filePath, workspace, this.config.maxDocumentBytes, querySignal)
+      const source = await readHostSource(fs, request.filePath, workspace, this.config.maxDocumentBytes, querySignal)
       // Disposal may have snapshotted the instance map while host I/O was pending. Re-check before a
       // synchronous get-or-create so every spawned process remains owned by teardown.
       this.assertActive(querySignal)
-      let instance = this.instanceFor(workspaceKey, workspace)
+      const runtime = await this.runtimeFor(world, querySignal)
+      let instance = this.instanceFor(workspaceKey, workspace, runtime)
       try {
         return await instance.query(request, source, querySignal)
       } catch (error) {
@@ -290,7 +323,7 @@ class LocalLspProvider implements LspProvider {
         await instance.dispose()
         this.evictIfCurrent(workspaceKey, instance)
         this.assertActive(querySignal)
-        instance = this.instanceFor(workspaceKey, workspace)
+        instance = this.instanceFor(workspaceKey, workspace, runtime)
         return await instance.query(request, source, querySignal)
       } finally {
         // Reach quiescence before dropping a dead slot; a replacement must survive this ownership check.
@@ -300,6 +333,39 @@ class LocalLspProvider implements LspProvider {
         }
       }
     })
+  }
+
+  /** The executable + spawner pair for one world (resolved lazily, cached). */
+  private runtimeFor(
+    world: ResolvedExecutionWorld | undefined,
+    signal: AbortSignal,
+  ): Promise<WorldRuntime> {
+    if (world === undefined) {
+      return Promise.resolve({ executable: this.executable, spawner: this.spawner })
+    }
+    const key = `${world.location.providerId}\u0000${JSON.stringify(world.location.target)}`
+    let runtime = this.worldRuntimes.get(key)
+    if (runtime === undefined) {
+      const subprocess = world.subprocess
+      if (subprocess === undefined) {
+        runtime = Promise.reject(new LspError(
+          `lsp-stdio: world provider '${world.location.providerId}' registers no subprocess capability`,
+          'LSP_SERVER_START',
+        ))
+      } else {
+        runtime = subprocess.resolveExecutable(
+          this.config.command,
+          this.config.env,
+          signal,
+          world.location,
+        ).then(executable => ({
+          executable,
+          spawner: (spec: SubprocessSpawnSpec) => subprocess.spawn({ ...spec, world: world.location }),
+        }))
+      }
+      this.worldRuntimes.set(key, runtime)
+    }
+    return runtime
   }
 
   /** Serialize one complete query lifecycle for a canonical workspace. */
@@ -317,11 +383,11 @@ class LocalLspProvider implements LspProvider {
   }
 
   /** Return or synchronously publish the one instance for a canonical workspace. */
-  private instanceFor(workspaceKey: WorkspaceKey, workspace: HostWorkspace): LspInstance {
+  private instanceFor(workspaceKey: WorkspaceKey, workspace: HostWorkspace, runtime: WorldRuntime): LspInstance {
     this.assertActive()
     const existing = this.instances.get(workspaceKey)
     if (existing !== undefined) return existing
-    const created = this.createInstance(workspace)
+    const created = this.createInstance(workspace, runtime)
     this.instances.set(workspaceKey, created)
     return created
   }
@@ -332,9 +398,9 @@ class LocalLspProvider implements LspProvider {
     if (this.instances.get(workspace) === instance) this.instances.delete(workspace)
   }
 
-  private createInstance(workspace: HostWorkspace): LspInstance {
+  private createInstance(workspace: HostWorkspace, runtime: WorldRuntime): LspInstance {
     const spec: InstanceSpec = {
-      command: this.executable,
+      command: runtime.executable,
       args: this.config.args,
       cwd: workspace.canonicalPath,
       workspaceUri: workspace.fileUrl,
@@ -346,7 +412,7 @@ class LocalLspProvider implements LspProvider {
       shutdownTimeoutMs: this.config.shutdownTimeoutMs,
       killGraceMs: this.config.killGraceMs,
     }
-    return new LspInstance(spec, this.spawner)
+    return new LspInstance(spec, runtime.spawner)
   }
 
   /** Dispose every live instance and block further queries. */

@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":1,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
 {"type":"agent/inbox/spliced","seq":0,"time":1785498791421,"data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Start a long task; this turn will be cancelled mid-stream."}],"source":{"kind":"user"},"role":"user","id":"f74653c2-8793-4004-ab0d-833a8dfd42bf"}]}}
 {"type":"turn/start","seq":1,"time":1785821401560,"data":{"turn":1}}
 {"type":"agent/inbox/spliced","seq":2,"time":1785821401560,"data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}

@@ -9,13 +9,14 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import { isAbsolute } from 'node:path'
 import { deepFreeze } from '@deepseek-ai/dsh-llm'
+import type { ExecutionLocation } from '@deepseek-ai/dsh-execution-location'
 import { scopeOf, scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import type { Message } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, SessionId } from './types.ts'
 import type { TypertLookup } from '@deepseek-ai/dsh-typert-protocol'
 import type { CreateSessionOptions, EpochHeader, PrepareSessionOptions, RequestContext, SessionEvent, SessionEventMap, SessionEventType, SessionHeader, SurfaceIntent, SurfaceEventType } from './types.ts'
-import { snapshotJsonValue } from './json.ts'
+import { isJsonValue, snapshotJsonValue } from './json.ts'
 import { deriveEventMessage, SurfaceManager } from './surface.ts'
 import type { SessionSurface } from './surface.ts'
 import { foldRequestHeader } from './request-header.ts'
@@ -115,6 +116,9 @@ function validateSessionHeader(id: SessionId, input: unknown): SessionHeader {
       throw new Error(`session header cwd must be an absolute path, got "${record.cwd}"`)
     }
   }
+  if (record.executionLocation !== undefined) {
+    validateExecutionLocation(record.executionLocation, record.cwd)
+  }
   if (record.parentSession !== undefined && typeof record.parentSession !== 'string') {
     throw new Error('session header parentSession must be a string')
   }
@@ -133,6 +137,63 @@ function validateSessionHeader(id: SessionId, input: unknown): SessionHeader {
     throw new Error('session header agentPreset must be a string')
   }
   return deepFreeze(record as unknown as SessionHeader)
+}
+
+/**
+ * Validate the header's execution location shape. The location is
+ * JSON-persistable and opaque to the session store: only the field skeleton is
+ * checked here, and the owning provider performs business validation when the
+ * location is used.
+ * @param location - the header's execution location record.
+ * @param cwd - the header's cwd, when present (both may coexist; `cwd` is the
+ *   canonical absolute directory inside the location's world).
+ */
+function validateExecutionLocation(location: unknown, cwd: unknown): void {
+  if (location === null || typeof location !== 'object' || Array.isArray(location)) {
+    throw new Error('session header executionLocation must be an object')
+  }
+  const record = location as Record<string, unknown>
+  if (typeof record.providerId !== 'string' || record.providerId.trim().length === 0) {
+    throw new Error('session header executionLocation.providerId must be a non-empty string')
+  }
+  if (typeof record.root !== 'string' || record.root.trim().length === 0) {
+    throw new Error('session header executionLocation.root must be a non-empty string')
+  }
+  if (!('target' in record) || !isJsonValue(record.target)) {
+    throw new Error('session header executionLocation.target must be lossless JSON')
+  }
+  if (record.display !== undefined) {
+    if (record.display === null || typeof record.display !== 'object' || Array.isArray(record.display)) {
+      throw new Error('session header executionLocation.display must be an object')
+    }
+    const display = record.display as Record<string, unknown>
+    for (const key of ['label', 'host'] as const) {
+      if (display[key] !== undefined && typeof display[key] !== 'string') {
+        throw new Error(`session header executionLocation.display.${key} must be a string`)
+      }
+    }
+  }
+  if (cwd !== undefined && typeof cwd === 'string' && !isAbsolute(cwd)) {
+    throw new Error(`session header cwd must be an absolute path within its execution world, got "${cwd}"`)
+  }
+}
+
+/**
+ * The execution location a session header belongs to: the persisted
+ * `executionLocation` when present, else the local world at `cwd` (the
+ * pre-v1 interpretation). Not canonicalized — the workspace registry resolves
+ * and canonicalizes through the owning provider.
+ * @param header - a session header (or its storage face).
+ * @returns the header's execution location, or `undefined` when the header
+ *   carries neither an execution location nor a cwd.
+ */
+export function executionLocationOfHeader(header: {
+  readonly executionLocation?: ExecutionLocation
+  readonly cwd?: string
+}): ExecutionLocation | undefined {
+  if (header.executionLocation !== undefined) return header.executionLocation
+  if (header.cwd === undefined) return undefined
+  return { providerId: 'local', target: null, root: header.cwd }
 }
 
 /** Validate and freeze one exclusively owned persistence header in place. */

@@ -55,6 +55,8 @@ import * as ToolSchedule from '@deepseek-ai/dsh-schedule'
 import Lsp from '@deepseek-ai/dsh-lsp'
 import * as ToolLsp from '@deepseek-ai/dsh-tool-lsp'
 import * as ToolSkill from '@deepseek-ai/dsh-tool-skill'
+import SshRuntime from '@deepseek-ai/dsh-ssh'
+import * as ToolSsh from '@deepseek-ai/dsh-tool-ssh'
 import * as ToolSessionQuery from '@deepseek-ai/dsh-tool-session-query'
 import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
 import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
@@ -434,6 +436,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'The five read-only tools hide provider cursors and authorize every result from the immutable calling agent session. The package is opt-in; compositions that need enforced deadlines or bounded inline output also mount the generic timeout or spill policies.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-ssh',
+    dir: 'tool-ssh',
+    source: 'packages/ssh/tool-ssh/src/index.ts',
+    requires: ['ctx.tools', 'ctx.shell', 'ctx.ssh'],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(LocalSubprocessRuntime)
+      await ctx.plugin(BashEnvPlugin)
+      await ctx.plugin(LocalBashExecutor)
+      await ctx.plugin(SshRuntime, { sshConfigPath: resolve(root, '.tmp/tool-catalog/ssh-config') })
+      await ctx.plugin(ToolSsh)
+    },
+    note:
+      'ssh_exec runs an explicit command through the local shell-owned OpenSSH client; ssh_connections manages saved connection metadata and an optional current-workspace default. SSH workspaces route ordinary filesystem and subprocess work through their execution world instead.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-subagent',

@@ -18,6 +18,12 @@
       "path": "../../../vendor/schemastery"
     },
     {
+      "path": "../../execution/execution-location"
+    },
+    {
+      "path": "../../execution/execution-world"
+    },
+    {
       "path": "../../llm/llm"
     },
     {
